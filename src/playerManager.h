@@ -46,6 +46,10 @@ public:
 	std::unordered_map<uint64_t, std::unique_ptr<Player>>* getAllPlayers() { return &mapPlayers; }
     std::set<uint64_t>* getOnlinePlayerIds() { return &setOnlinePlayerIds; }
     void syncPlayerFromDbNoLock(uint64_t id, uint32_t score, uint32_t wins, uint64_t updatedTime);
+
+    void savePlayer(uint64_t playerId);
+    void saveDirtyPlayers();
+
     //void getTopPlayers(std::vector<PlayerRank>& refVecTops);
 
     // --- 排行榜相關新增方法 ---
@@ -73,13 +77,15 @@ private:
 	std::set<uint64_t> setOnlinePlayerIds{};
 	std::mutex mapPlayersMutex;
 
+    std::set<uint64_t> setDirtyPlayerIds{};
+    std::mutex setdirtyPlayerIdsMutex;
+
     // --- 排行榜專用成員 ---
     std::vector<PlayerRankInfo> m_vecCachedLeaderboard; // 儲存預計算且排序好的排行榜數據
     std::mutex m_cachedLeaderboardMutex;             // 保護 m_cachedLeaderboard 的互斥鎖
 
     std::thread m_leaderboardThread;                 // 排行榜更新的獨立執行緒
     std::atomic_bool m_running;                      // 控制執行緒運行狀態的原子旗標
-
 
 };
 

@@ -1,7 +1,7 @@
 #include "dbManager.h"
 #include "playerManager.h"
-#include "..\sqlite\sqlite3.h"
-#include <..\..\utils\timeUtils.h>
+#include "../sqlite/sqlite3.h"
+#include <../../utils/utils.h>
 #include <iostream>
 #include <chrono>
 
@@ -118,7 +118,6 @@ void DbManager::syncAllPlayerBattles()
     sqlite3_finalize(stmt);
 }
 
-// 實作 tableExists 方法
 bool DbManager::isTableExists(const std::string tableName)
 {
     if (!pDbHandler) 
@@ -189,7 +188,7 @@ uint64_t DbManager::insertPlayerBattles()
     }
     const uint32_t score = 0;
 	const uint32_t wins = 0;
-	const uint64_t updatedTime = DemoTimeUtils::getTimestampMS(); // 獲取當前時間戳
+	const uint64_t updatedTime = time_utils::getTimestampMS(); // 獲取當前時間戳
 
     sqlite3_bind_int(stmt, 1, score);
     sqlite3_bind_int(stmt, 2, wins);
@@ -213,9 +212,9 @@ uint64_t DbManager::insertPlayerBattles()
 	PlayerManager::instance().syncPlayerFromDbNoLock(id, score, wins, updatedTime); // 同步至 PlayerManager
     return id;
 }
-
 bool DbManager::updatePlayerBattles(uint64_t id, uint32_t score, uint32_t wins)
 {
+    // SQL 語句：注意 ? 的順序必須與綁定順序一致
     const char* sql = "UPDATE player_battles SET score = ?, wins = ?, updated_time = ? WHERE id = ?;";
 
     sqlite3_stmt* stmt;
@@ -223,28 +222,28 @@ bool DbManager::updatePlayerBattles(uint64_t id, uint32_t score, uint32_t wins)
 
     if (rc != SQLITE_OK)
     {
-        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(pDbHandler) << std::endl;
+        std::cerr << "DbManager::updatePlayerBattles: Failed to prepare statement: " << sqlite3_errmsg(pDbHandler) << std::endl;
         return false;
     }
-    const uint16_t updateTime = 
 
-    sqlite3_bind_int64(stmt, 1, id);
-    sqlite3_bind_int(stmt, 2, score);
-    sqlite3_bind_int(stmt, 3, wins);
-    sqlite3_bind_int64(stmt, 4, updateTime);
+    const uint64_t updatedTime = time_utils::getTimestampMS();
+
+    sqlite3_bind_int(stmt, 1, score);
+    sqlite3_bind_int(stmt, 2, wins);
+    sqlite3_bind_int64(stmt, 3, updatedTime);
+    sqlite3_bind_int64(stmt, 4, id);
 
     rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
+    sqlite3_finalize(stmt); // 執行完畢後必須清理語句
 
     if (rc != SQLITE_DONE)
     {
-        std::cerr << "Failed to save player: " << sqlite3_errmsg(pDbHandler) << std::endl;
+        std::cerr << "DbManager::updatePlayerBattles: Failed to save player: " << sqlite3_errmsg(pDbHandler) << std::endl;
         return false;
     }
 
     return true;
 }
-
 bool DbManager::queryPlayerBattles(uint64_t id, uint32_t& score, uint32_t& wins, uint64_t& updateTime)
 {
     const char* sql = "SELECT score, wins, updated_time FROM player_battles WHERE id = ?;";

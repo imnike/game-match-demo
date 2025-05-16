@@ -18,7 +18,7 @@ public:
     void addScore(uint32_t scoreDelta);
     void subScore(uint32_t scoreDelta);
     void addWins();
-    void save() const;
+
 
 private:
     uint64_t m_id = 0;

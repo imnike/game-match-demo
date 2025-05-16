@@ -1,74 +1,93 @@
+// battleManager.h
 #ifndef BATTLE_MANAGER_H
 #define BATTLE_MANAGER_H
-
-#include "playerManager.h"
+#include "objects/player.h"
 #include <vector>
 #include <map>
 #include <mutex>
 #include <thread>
-#include <cstdint> 
+#include <atomic>
 
-// --- BattleRoom Class ---
+// 前向聲明 PlayerManager (如果沒有在 player.h 中包含)
+class PlayerManager;
+class Player;
+
+// --- BattleRoom 類別 (戰鬥房間) ---
 class BattleRoom
 {
 public:
-    BattleRoom(std::vector<Player*> blackTeam, std::vector<Player*> whiteTeam);
+    // 將黑隊白隊改為紅隊藍隊
+    BattleRoom(std::vector<Player*> vecTeamRed, std::vector<Player*> vecTeamBlue);
     ~BattleRoom();
-
     void startBattle();
 
 private:
-    std::vector<Player*> blackTeam;
-    std::vector<Player*> whiteTeam;
+    std::vector<Player*> vecTeamRed;
+    std::vector<Player*> vecTeamBlue;
 };
 
-// --- MatchQueue Class ---
-class MatchQueue
+// --- TeamMatchQueue 類別 (保持不變，因為它處理的是單個玩家) ---
+// 用於將單個玩家匹配成隊伍 (例如 3 人一隊)
+class TeamMatchQueue
 {
 public:
-    MatchQueue();
-    ~MatchQueue();
+    TeamMatchQueue();
+    ~TeamMatchQueue();
 
-    void addPlayer(Player* pPlayer);
-    // Renamed from hasEnoughPlayersForLevel to reflect tier-based matchmaking
-    bool hasEnoughPlayersForTier(uint32_t tier);
-    // Renamed from getPlayersForMatch (level) to getPlayersForMatch (tier)
-    std::vector<Player*> getPlayersForMatch(uint32_t tier);
+    void addMember(Player* pPlayer);
+    bool hasEnoughMemberForTeam(uint32_t tier);
+    std::vector<Player*> getPlayersForTeam(uint32_t tier);
 
-    std::mutex mutex; // Mutex to protect access to tierQueues
-    // Changed from levelQueues to tierQueues
-    std::map<uint32_t, std::vector<Player*>> tierQueues;
+    std::mutex mutex;
+    std::map<uint32_t, std::vector<Player*>> mapTierQueues;
 };
 
-// --- BattleManager Class (Singleton) ---
+// --- BattleMatchQueue 類別 (保持不變，因為它處理的是隊伍列表) ---
+// 用於將已組成的隊伍匹配成戰鬥 (例如 2 支隊伍一場戰鬥)
+class BattleMatchQueue
+{
+public:
+    BattleMatchQueue();
+    ~BattleMatchQueue();
+
+    void addTeam(std::vector<Player*> team);
+    bool hasEnoughTeamsForBattle(uint32_t tier);
+    std::vector<std::vector<Player*>> getTeamsForBattle(uint32_t tier);
+
+    std::mutex mutex;
+    std::map<uint32_t, std::vector<std::vector<Player*>>> mapTierQueues;
+};
+
+// --- BattleManager 類別 (單例模式) ---
 class BattleManager
 {
 public:
-    // Singleton instance access
     static BattleManager& instance();
-
-    // Prevent copying and assignment
-    BattleManager(const BattleManager&) = delete;
-    BattleManager& operator=(const BattleManager&) = delete;
 
     bool initialize();
     void release();
 
     void startMatchmaking();
     void stopMatchmaking();
+
     void addPlayerToQueue(Player* pPlayer);
-	void PlayerWin(Player* pPlayer);
-	void PlayerLose(Player* pPlayer);
+
+    void PlayerWin(Player* pPlayer);
+    void PlayerLose(Player* pPlayer);
 
 private:
-    BattleManager(); // Private constructor for singleton
+    BattleManager();
     ~BattleManager();
+    BattleManager(const BattleManager&) = delete;
+    BattleManager& operator=(const BattleManager&) = delete;
 
     void matchmakingThread();
 
-    MatchQueue matchQueue;
+    std::atomic<bool> isRunning;
     std::thread matchmakingThreadHandle;
-    std::atomic<bool> isRunning; // Use atomic for thread-safe flag
+
+    TeamMatchQueue teamMatchQueue;
+    BattleMatchQueue battleMatchQueue;
 };
 
 #endif // BATTLE_MANAGER_H

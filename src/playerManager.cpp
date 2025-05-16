@@ -1,8 +1,9 @@
+// playerManager.cpp
 #include "playerManager.h"
 #include "dbManager.h"
 #include "battleManager.h"
-#include "..\utils\timeUtils.h"
-#include "..\include\globalDefine.h"
+#include "../utils/utils.h"
+#include "../include/globalDefine.h"
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -257,4 +258,36 @@ std::vector<PlayerRankInfo> PlayerManager::getLeaderboard(size_t topN)
         count++;
     }
     return result;
+}
+
+void PlayerManager::savePlayer(uint64_t playerId)
+{
+	std::lock_guard<std::mutex> lock(mapPlayersMutex);
+	setDirtyPlayerIds.emplace(playerId);
+    //DbManager::instance().updatePlayerBattles(m_id, m_score, m_wins);
+}
+
+void PlayerManager::saveDirtyPlayers()
+{
+    if (setDirtyPlayerIds.empty())
+    {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(mapPlayersMutex);
+    std::set<uint64_t> setSaveIds;
+    {
+        // 僅鎖定 m_dirtyPlayerIdsMutex，並迅速交換數據
+        std::lock_guard<std::mutex> lock(setdirtyPlayerIdsMutex);
+        setSaveIds.swap(setDirtyPlayerIds); // 將 m_dirtyPlayerIds 的內容移動到 setSaveIds
+        // 這樣，m_dirtyPlayerIds 就可以立即接受新的 ID 了
+    }
+    for (auto& id : setSaveIds)
+    {
+		Player* pPlayer = _getPlayerNoLock(id);
+        if (pPlayer == nullptr)
+        {
+            continue;
+        }
+        DbManager::instance().updatePlayerBattles(pPlayer->getId(), pPlayer->getScore(), pPlayer->getWins());
+    }
 }

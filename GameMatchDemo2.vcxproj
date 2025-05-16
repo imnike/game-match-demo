@@ -129,7 +129,8 @@
     <ClInclude Include="src\dbManager.h" />
     <ClInclude Include="src\objects\player.h" />
     <ClInclude Include="src\playerManager.h" />
-    <ClInclude Include="utils\timeUtils.h" />
+    <ClInclude Include="src\scheduleManager.h" />
+    <ClInclude Include="utils\utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="sqlite\sqlite3.c" />
@@ -138,7 +139,8 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\objects\player.cpp" />
     <ClCompile Include="src\playerManager.cpp" />
-    <ClCompile Include="utils\timeUtils.cpp" />
+    <ClCompile Include="src\scheduleManager.cpp" />
+    <ClCompile Include="utils\utils.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

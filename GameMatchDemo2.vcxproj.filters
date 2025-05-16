@@ -30,7 +30,7 @@
     <ClInclude Include="sqlite\sqlite3.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="utils\timeUtils.h">
+    <ClInclude Include="utils\utils.h">
       <Filter>utils</Filter>
     </ClInclude>
     <ClInclude Include="src\battleManager.h">
@@ -48,12 +48,15 @@
     <ClInclude Include="src\objects\player.h">
       <Filter>src\objects</Filter>
     </ClInclude>
+    <ClInclude Include="src\scheduleManager.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="sqlite\sqlite3.c">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="utils\timeUtils.cpp">
+    <ClCompile Include="utils\utils.cpp">
       <Filter>utils</Filter>
     </ClCompile>
     <ClCompile Include="src\battleManager.cpp">
@@ -70,6 +73,9 @@
     </ClCompile>
     <ClCompile Include="src\objects\player.cpp">
       <Filter>src\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scheduleManager.cpp">
+      <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

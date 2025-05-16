@@ -1,7 +1,8 @@
+// player.cpp
 #include "player.h"
-#include "..\..\include\globalDefine.h"
-#include "..\..\utils\timeUtils.h"
-#include "..\dbManager.h"
+#include "../../include/globalDefine.h"
+#include "../../utils/utils.h"
+#include "../dbManager.h"
 
 Player::Player(uint64_t id, uint32_t score, uint32_t wins, uint64_t updateTime)
     : m_id(id), m_score(score), m_wins(wins), m_updatedTime(updateTime)
@@ -39,7 +40,3 @@ void Player::addWins()
     m_wins++;
 }
 
-void Player::save() const
-{
-    DbManager::instance().updatePlayerBattles(m_id, m_score, m_wins);
-}

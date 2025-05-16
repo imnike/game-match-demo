@@ -1,14 +1,17 @@
+// battleManager.cpp
 #include "battleManager.h"
-#include "..\include\globalDefine.h"
+#include "playerManager.h"
+#include "../include/globalDefine.h"
+#include "../utils/utils.h"
 #include <iostream>
-#include <algorithm> 
+#include <algorithm>
 #include <random>
 #include <thread>
 #include <chrono>
 
 // --- BattleRoom Implementation ---
-BattleRoom::BattleRoom(std::vector<Player*> blackTeam, std::vector<Player*> whiteTeam)
-    : blackTeam(blackTeam), whiteTeam(whiteTeam)
+BattleRoom::BattleRoom(std::vector<Player*> vecTeamRed, std::vector<Player*> vecTeamBlue)
+    : vecTeamRed(vecTeamRed), vecTeamBlue(vecTeamBlue)
 {
 }
 
@@ -18,51 +21,62 @@ BattleRoom::~BattleRoom()
 
 void BattleRoom::startBattle()
 {
-    // Display initial battle state
+    // 顯示戰鬥開始狀態
     std::cout << "\n----- BATTLE STARTS -----" << std::endl;
-    std::cout << "Black Team (Tier " << (blackTeam.empty() ? 0 : blackTeam[0]->getTier()) << "):" << std::endl;
-    for (const auto& player : blackTeam)
+    std::cout << "Red Team (Tier " << (vecTeamRed.empty() ? 0 : vecTeamRed[0]->getTier()) << ", Players: ";
+    for (const auto& player : vecTeamRed)
     {
-        std::cout << "  Player " << player->getId()
-            << " (Score: " << player->getScore()
-            << ", Tier: " << player->getTier() << ")" << std::endl;
+        std::cout << player->getId() << " ";
     }
-
-    std::cout << "White Team (Tier " << (whiteTeam.empty() ? 0 : whiteTeam[0]->getTier()) << "):" << std::endl;
-    for (const auto& pPlayer : whiteTeam)
+    std::cout << "):" << std::endl;
+    for (const auto& pPlayer : vecTeamRed)
     {
         std::cout << "  Player " << pPlayer->getId()
             << " (Score: " << pPlayer->getScore()
             << ", Tier: " << pPlayer->getTier() << ")" << std::endl;
     }
 
-    // Randomly decide the winning team (Black or White)
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, 1);
-    bool blackTeamWins = dis(gen) == 1;
+    std::cout << "Blue Team (Tier " << (vecTeamBlue.empty() ? 0 : vecTeamBlue[0]->getTier()) << ", Players: ";
+    for (const auto& pPlayer : vecTeamBlue)
+    {
+        std::cout << pPlayer->getId() << " ";
+    }
+    std::cout << "):" << std::endl;
+    for (const auto& pPlayer : vecTeamBlue)
+    {
+        std::cout << "  Player " << pPlayer->getId()
+            << " (Score: " << pPlayer->getScore()
+            << ", Tier: " << pPlayer->getTier() << ")" << std::endl;
+    }
 
-    std::vector<Player*>& winningTeam = blackTeamWins ? blackTeam : whiteTeam;
-    std::vector<Player*>& losingTeam = blackTeamWins ? whiteTeam : blackTeam;
+    // 隨機決定獲勝隊伍 (紅隊或藍隊)
+    // random_utils::getRandom(2) 會返回 0 或 1。
+    // 如果返回 0 則紅隊贏，返回 1 則藍隊贏
+    uint8_t dice = 2;
+    bool redTeamWins = (random_utils::getRandom(dice) == 0);
 
-    std::cout << "\n" << (blackTeamWins ? "Black" : "White") << " Team wins!" << std::endl;
+    std::vector<Player*>& vecWinningTeam = redTeamWins ? vecTeamRed : vecTeamBlue;
+    std::vector<Player*>& vecLosingTeam = redTeamWins ? vecTeamBlue : vecTeamRed;
 
-    // Update scores for winning and losing teams
-    for (auto& pPlayer : winningTeam)
+    std::cout << "\n" << (redTeamWins ? "Red" : "Blue") << " Team wins!" << std::endl;
+
+    // 更新獲勝隊伍和落敗隊伍的分數
+    for (auto& pPlayer : vecWinningTeam)
     {
         if (pPlayer == nullptr)
         {
-			continue;
+            continue;
         }
-		BattleManager::instance().PlayerWin(pPlayer);
+        BattleManager::instance().PlayerWin(pPlayer);
 
         std::cout << "  Player " << pPlayer->getId()
-            << " gets +50 points, new score: " << pPlayer->getScore()
+            << " gets +" << battle_constant::WINNER_SCORE
+            << " points, new score: " << pPlayer->getScore()
             << ", new tier: " << pPlayer->getTier() << std::endl;
-        PlayerManager::instance().playerLogout(pPlayer->getId());
+        PlayerManager::instance().playerLogout(pPlayer->getId()); // 戰鬥結束，玩家登出
     }
 
-    for (auto& pPlayer : losingTeam)
+    for (auto& pPlayer : vecLosingTeam)
     {
         if (pPlayer == nullptr)
         {
@@ -71,64 +85,98 @@ void BattleRoom::startBattle()
         BattleManager::instance().PlayerLose(pPlayer);
 
         std::cout << "  Player " << pPlayer->getId()
-            << " loses 50 points, new score: " << pPlayer->getScore()
+            << " loses " << battle_constant::LOSER_SCORE
+            << " points, new score: " << pPlayer->getScore()
             << ", new tier: " << pPlayer->getTier() << std::endl;
-        PlayerManager::instance().playerLogout(pPlayer->getId());
+        PlayerManager::instance().playerLogout(pPlayer->getId()); // 戰鬥結束，玩家登出
     }
     std::cout << "----- BATTLE ENDS -----\n" << std::endl;
 }
 
-// --- MatchQueue Implementation ---
-MatchQueue::MatchQueue()
-{
-}
+// --- TeamMatchQueue Implementation (保持不變) ---
+TeamMatchQueue::TeamMatchQueue() {}
+TeamMatchQueue::~TeamMatchQueue() {}
 
-MatchQueue::~MatchQueue()
-{
-}
-
-void MatchQueue::addPlayer(Player* pPlayer)
+void TeamMatchQueue::addMember(Player* pPlayer)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    uint32_t tier = pPlayer->getTier(); // Get player's tier
-    tierQueues[tier].push_back(pPlayer);
+    uint32_t tier = pPlayer->getTier();
+    mapTierQueues[tier].push_back(pPlayer);
 
-    std::cout << "Player " << pPlayer->getId() << " added to match queue for tier " << tier << std::endl;
+    std::cout << "Player " << pPlayer->getId() << " added to TEAM match queue for tier " << tier << std::endl;
 }
 
-bool MatchQueue::hasEnoughPlayersForTier(uint32_t tier) // Changed to tier
+bool TeamMatchQueue::hasEnoughMemberForTeam(uint32_t tier)
 {
     std::lock_guard<std::mutex> lock(mutex);
-
-    auto it = tierQueues.find(tier);
-    // We need 6 players for a 3v3 match (3 per team)
-    return it != tierQueues.end() && it->second.size() >= 6;
+    auto it = mapTierQueues.find(tier);
+    return it != mapTierQueues.end() && it->second.size() >= 3;
 }
 
-std::vector<Player*> MatchQueue::getPlayersForMatch(uint32_t tier) // Changed to tier
+std::vector<Player*> TeamMatchQueue::getPlayersForTeam(uint32_t tier)
 {
     std::lock_guard<std::mutex> lock(mutex);
+    std::vector<Player*> teamPlayers;
+    auto it = mapTierQueues.find(tier);
 
-    std::vector<Player*> matchedPlayers;
-    auto it = tierQueues.find(tier);
-
-    if (it != tierQueues.end() && it->second.size() >= 6)
+    if (it != mapTierQueues.end() && it->second.size() >= 3)
     {
-        // Take the first 6 players for the match
-        matchedPlayers.assign(it->second.begin(), it->second.begin() + 6);
+        teamPlayers.assign(it->second.begin(), it->second.begin() + 3);
+        it->second.erase(it->second.begin(), it->second.begin() + 3);
 
-        // Remove these players from the queue
-        it->second.erase(it->second.begin(), it->second.begin() + 6);
-
-        // If the queue for this tier becomes empty, remove it from the map
         if (it->second.empty())
         {
-            tierQueues.erase(it);
+            mapTierQueues.erase(it);
         }
     }
+    return teamPlayers;
+}
 
-    return matchedPlayers;
+// --- BattleMatchQueue Implementation (保持不變) ---
+BattleMatchQueue::BattleMatchQueue() {}
+BattleMatchQueue::~BattleMatchQueue() {}
+
+void BattleMatchQueue::addTeam(std::vector<Player*> team)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    if (team.empty()) {
+        return;
+    }
+    uint32_t tier = team[battle_constant::TeamColor::Red]->getTier();
+    mapTierQueues[tier].push_back(team);
+
+    std::cout << "Team (Tier " << tier << ") added to BATTLE match queue. Players: ";
+    for (Player* p : team) {
+        std::cout << p->getId() << " ";
+    }
+    std::cout << std::endl;
+}
+
+bool BattleMatchQueue::hasEnoughTeamsForBattle(uint32_t tier)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    auto it = mapTierQueues.find(tier);
+    return it != mapTierQueues.end() && it->second.size() >= battle_constant::TeamColor::Max;
+}
+
+std::vector<std::vector<Player*>> BattleMatchQueue::getTeamsForBattle(uint32_t tier)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    std::vector<std::vector<Player*>> battleTeams;
+    auto it = mapTierQueues.find(tier);
+
+    if (it != mapTierQueues.end() && it->second.size() >= battle_constant::TeamColor::Max)
+    {
+        battleTeams.assign(it->second.begin(), it->second.begin() + 2);
+        it->second.erase(it->second.begin(), it->second.begin() + 2);
+
+        if (it->second.empty())
+        {
+            mapTierQueues.erase(it);
+        }
+    }
+    return battleTeams;
 }
 
 // --- BattleManager Implementation (Singleton) ---
@@ -175,25 +223,25 @@ void BattleManager::stopMatchmaking()
         isRunning = false;
         if (matchmakingThreadHandle.joinable())
         {
-            matchmakingThreadHandle.join(); // Wait for the matchmaking thread to finish
+            matchmakingThreadHandle.join();
         }
     }
 }
 
 void BattleManager::addPlayerToQueue(Player* pPlayer)
 {
-    matchQueue.addPlayer(pPlayer);
+    teamMatchQueue.addMember(pPlayer);
 }
 
 void BattleManager::PlayerWin(Player* pPlayer)
 {
     if (pPlayer == nullptr)
     {
-		return;
+        return;
     }
-	pPlayer->addWins();
-    pPlayer->addScore(BattleResult::WINNER_SCORE);
-    pPlayer->save();
+    pPlayer->addWins();
+    pPlayer->addScore(battle_constant::WINNER_SCORE);
+    PlayerManager::instance().savePlayer(pPlayer->getId());
 }
 
 void BattleManager::PlayerLose(Player* pPlayer)
@@ -202,8 +250,8 @@ void BattleManager::PlayerLose(Player* pPlayer)
     {
         return;
     }
-    pPlayer->subScore(BattleResult::LOSER_SCORE);
-	pPlayer->save();
+    pPlayer->subScore(battle_constant::LOSER_SCORE);
+    PlayerManager::instance().savePlayer(pPlayer->getId());
 }
 
 void BattleManager::matchmakingThread()
@@ -212,44 +260,68 @@ void BattleManager::matchmakingThread()
 
     while (isRunning)
     {
-        // Get all tiers that currently have players in queues
-        std::vector<uint32_t> tiersToCheck;
+        // --- 階段一：玩家到隊伍 (Player to Team) ---
+        std::vector<uint32_t> tiersToFormTeams;
         {
-            std::lock_guard<std::mutex> lock(matchQueue.mutex);
-            for (const auto& queuePair : matchQueue.tierQueues)
+            std::lock_guard<std::mutex> lock(teamMatchQueue.mutex);
+            for (const auto& queuePair : teamMatchQueue.mapTierQueues)
             {
-                tiersToCheck.push_back(queuePair.first);
+                tiersToFormTeams.push_back(queuePair.first);
             }
         }
 
-        // Check each tier for enough players to form a match
-        for (uint32_t tier : tiersToCheck)
+        for (uint32_t tier : tiersToFormTeams)
         {
-            if (matchQueue.hasEnoughPlayersForTier(tier))
+            if (teamMatchQueue.hasEnoughMemberForTeam(tier))
             {
-                std::vector<Player*> matchedPlayers = matchQueue.getPlayersForMatch(tier);
+                std::vector<Player*> newTeam = teamMatchQueue.getPlayersForTeam(tier);
 
-                if (matchedPlayers.size() >= 6)
+                if (newTeam.size() == 3)
                 {
-                    std::cout << "\nMatched " << matchedPlayers.size() << " players for tier " << tier << std::endl;
+                    std::cout << "  Formed a 3-player team for tier " << tier << ". Players: ";
+                    for (Player* p : newTeam) {
+                        std::cout << p->getId() << " ";
+                    }
+                    std::cout << std::endl;
 
-                    // Randomly shuffle players to ensure fair team distribution
-                    std::random_device rd;
-                    std::mt19937 g(rd());
-                    std::shuffle(matchedPlayers.begin(), matchedPlayers.end(), g);
-
-                    // Form two teams of 3 players each
-                    std::vector<Player*> blackTeam(matchedPlayers.begin(), matchedPlayers.begin() + 3);
-                    std::vector<Player*> whiteTeam(matchedPlayers.begin() + 3, matchedPlayers.end());
-
-                    // Create a battle room and start the battle
-                    BattleRoom room(blackTeam, whiteTeam);
-                    room.startBattle();
+                    battleMatchQueue.addTeam(newTeam);
+                }
+                else {
+                    std::cerr << "Warning: getPlayersForTeam returned incorrect number of players for tier " << tier << std::endl;
                 }
             }
         }
 
-        // Sleep for a short period to prevent busy-waiting and reduce CPU usage
+        // --- 階段二：隊伍到戰鬥 (Team to Battle) ---
+        std::vector<uint32_t> tiersToStartBattles;
+        {
+            std::lock_guard<std::mutex> lock(battleMatchQueue.mutex);
+            for (const auto& queuePair : battleMatchQueue.mapTierQueues)
+            {
+                tiersToStartBattles.push_back(queuePair.first);
+            }
+        }
+
+        for (uint32_t tier : tiersToStartBattles)
+        {
+            if (battleMatchQueue.hasEnoughTeamsForBattle(tier))
+            {
+                std::vector<std::vector<Player*>> battleTeams = battleMatchQueue.getTeamsForBattle(tier);
+
+                if (battleTeams.size() == battle_constant::TeamColor::Max)
+                {
+                    std::cout << "\n  Matched 2 teams for tier " << tier << ". Initiating battle!\n";
+
+                    // 將第一支隊伍設為紅隊，第二支為藍隊
+                    BattleRoom room(battleTeams[battle_constant::TeamColor::Red], battleTeams[battle_constant::TeamColor::Blue]);
+                    room.startBattle();
+                }
+                else {
+                    std::cerr << "Warning: getTeamsForBattle returned incorrect number of teams for tier " << tier << std::endl;
+                }
+            }
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
