@@ -1,6 +1,7 @@
-#include "..\include\dbManager.h"
-#include "..\include\playerManager.h"
+#include "dbManager.h"
+#include "playerManager.h"
 #include "..\sqlite\sqlite3.h"
+#include <..\..\utils\timeUtils.h>
 #include <iostream>
 #include <chrono>
 
@@ -82,14 +83,15 @@ void DbManager::loadTableData()
     for (auto& itFunc : mapFuncSyncData)
     {
 		const std::string tableName = itFunc.first;
-        std::cerr << "DbManager::initialize: No sync function found for table '" << tableName << "'." << std::endl;
+        // 執行itFunc
+        itFunc.second();
     }
 }
 
 // 初始化時取出所有玩家資料同步至playerManage
 void DbManager::syncAllPlayerBattles()
 {
-    const char* sql = "SELECT id, score, wins, update_time FROM player_battles;";
+    const char* sql = "SELECT id, score, wins, updated_time FROM player_battles;";
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(pDbHandler, sql, -1, &stmt, nullptr);
     if (rc != SQLITE_OK)
@@ -100,7 +102,7 @@ void DbManager::syncAllPlayerBattles()
     uint64_t id = 0;
     uint32_t score = 0;
     uint32_t wins = 0;
-	time_t updatedTime = 0;
+    uint64_t updatedTime = 0;
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW)
     {
         id = sqlite3_column_int64(stmt, 0);
@@ -111,7 +113,7 @@ void DbManager::syncAllPlayerBattles()
         {
             continue;
         }
-        PlayerManager::instance().syncPlayer(id, score, wins, updatedTime);
+        PlayerManager::instance().syncPlayerFromDbNoLock(id, score, wins, updatedTime);
     }
     sqlite3_finalize(stmt);
 }
@@ -130,7 +132,8 @@ bool DbManager::isTableExists(const std::string tableName)
     bool exists = false;
 
     int rc = sqlite3_prepare_v2(pDbHandler, sql, -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) {
+    if (rc != SQLITE_OK) 
+    {
         std::cerr << "DbManager::tableExists: Failed to prepare statement: " << sqlite3_errmsg(pDbHandler) << std::endl;
         // 即使 prepare 失敗，也確保 stmt 被清理
         if (stmt) sqlite3_finalize(stmt);
@@ -139,7 +142,8 @@ bool DbManager::isTableExists(const std::string tableName)
 
     sqlite3_bind_text(stmt, 1, tableName.c_str(), -1, SQLITE_STATIC);
 
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
+    if (sqlite3_step(stmt) == SQLITE_ROW) 
+    {
         exists = true; // 找到了匹配的行，表示表格存在
     }
 
@@ -149,13 +153,6 @@ bool DbManager::isTableExists(const std::string tableName)
 
 bool DbManager::createTable(const std::string tableName)
 {
-    //const char* sql =
-    //    "CREATE TABLE IF NOT EXISTS players ("
-    //    "id INTEGER PRIMARY KEY,"
-    //    "score INTEGER NOT NULL,"
-    //    "wins INTEGER NOT NULL,"
-    //    "update_time INTEGER NOT NULL);";
-
     auto itSql = MAP_CREATE_TABLE_SQL.find(tableName);
     if (itSql == MAP_CREATE_TABLE_SQL.end())
     {
@@ -179,7 +176,7 @@ uint64_t DbManager::insertPlayerBattles()
 {
     // SQL 語句不指定 id，讓 SQLite 自動生成 (因為 id 是 INTEGER PRIMARY KEY AUTOINCREMENT)
     const char* sql =
-        "INSERT INTO player_battles (score, wins, update_time) "
+        "INSERT INTO player_battles (score, wins, updated_time) "
         "VALUES (?, ?, ?);";
 
     sqlite3_stmt* stmt;
@@ -192,8 +189,7 @@ uint64_t DbManager::insertPlayerBattles()
     }
     const uint32_t score = 0;
 	const uint32_t wins = 0;
-    const time_t updatedTime = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+	const uint64_t updatedTime = DemoTimeUtils::getTimestampMS(); // 獲取當前時間戳
 
     sqlite3_bind_int(stmt, 1, score);
     sqlite3_bind_int(stmt, 2, wins);
@@ -214,13 +210,13 @@ uint64_t DbManager::insertPlayerBattles()
     {
         return 0;
     }
-	PlayerManager::instance().syncPlayer(id, score, wins, updatedTime); // 同步至 PlayerManager
+	PlayerManager::instance().syncPlayerFromDbNoLock(id, score, wins, updatedTime); // 同步至 PlayerManager
     return id;
 }
 
 bool DbManager::updatePlayerBattles(uint64_t id, uint32_t score, uint32_t wins)
 {
-    const char* sql = "UPDATE player_battles SET score = ?, wins = ?, update_time = ? WHERE id = ?;";
+    const char* sql = "UPDATE player_battles SET score = ?, wins = ?, updated_time = ? WHERE id = ?;";
 
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(pDbHandler, sql, -1, &stmt, nullptr);
@@ -230,8 +226,7 @@ bool DbManager::updatePlayerBattles(uint64_t id, uint32_t score, uint32_t wins)
         std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(pDbHandler) << std::endl;
         return false;
     }
-    const uint64_t updateTime = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+    const uint16_t updateTime = 
 
     sqlite3_bind_int64(stmt, 1, id);
     sqlite3_bind_int(stmt, 2, score);
@@ -250,9 +245,9 @@ bool DbManager::updatePlayerBattles(uint64_t id, uint32_t score, uint32_t wins)
     return true;
 }
 
-bool DbManager::queryPlayerBattles(uint64_t id, uint32_t& score, uint32_t& wins, time_t& updateTime)
+bool DbManager::queryPlayerBattles(uint64_t id, uint32_t& score, uint32_t& wins, uint64_t& updateTime)
 {
-    const char* sql = "SELECT score, wins, update_time FROM player_battles WHERE id = ?;";
+    const char* sql = "SELECT score, wins, updated_time FROM player_battles WHERE id = ?;";
 
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(pDbHandler, sql, -1, &stmt, nullptr);
@@ -276,36 +271,4 @@ bool DbManager::queryPlayerBattles(uint64_t id, uint32_t& score, uint32_t& wins,
         return true;
     }
     return false;
-}
-
-std::vector<DbManager::PlayerRank> DbManager::getTopPlayers()
-{
-    std::vector<PlayerRank> rankings;
-
-    const char* sql =
-        "SELECT id, score, wins, update_time FROM player_battles "
-        "ORDER BY score DESC, update_time ASC, id ASC;";
-
-    sqlite3_stmt* stmt;
-    int rc = sqlite3_prepare_v2(pDbHandler, sql, -1, &stmt, nullptr);
-
-    if (rc != SQLITE_OK)
-    {
-        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(pDbHandler) << std::endl;
-        return rankings;
-    }
-
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW)
-    {
-        PlayerRank rank;
-        rank.id = sqlite3_column_int64(stmt, 0);
-        rank.score = sqlite3_column_int(stmt, 1);
-        rank.wins = sqlite3_column_int(stmt, 2);
-        rank.updateTime = sqlite3_column_int64(stmt, 3);
-
-        rankings.push_back(rank);
-    }
-
-    sqlite3_finalize(stmt);
-    return rankings;
 }

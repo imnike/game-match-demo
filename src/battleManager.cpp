@@ -1,10 +1,10 @@
-#include "..\include\battleManager.h"
-// #include "dbManager.h" // Assuming dbManager exists but not directly used in this snippet
+#include "battleManager.h"
+#include "..\include\globalDefine.h"
 #include <iostream>
-#include <algorithm> // For std::shuffle
-#include <random>    // For std::random_device, std::mt19937, std::uniform_int_distribution
-#include <thread>    // For std::this_thread::sleep_for
-#include <chrono>    // For std::chrono::milliseconds
+#include <algorithm> 
+#include <random>
+#include <thread>
+#include <chrono>
 
 // --- BattleRoom Implementation ---
 BattleRoom::BattleRoom(std::vector<Player*> blackTeam, std::vector<Player*> whiteTeam)
@@ -29,11 +29,11 @@ void BattleRoom::startBattle()
     }
 
     std::cout << "White Team (Tier " << (whiteTeam.empty() ? 0 : whiteTeam[0]->getTier()) << "):" << std::endl;
-    for (const auto& player : whiteTeam)
+    for (const auto& pPlayer : whiteTeam)
     {
-        std::cout << "  Player " << player->getId()
-            << " (Score: " << player->getScore()
-            << ", Tier: " << player->getTier() << ")" << std::endl;
+        std::cout << "  Player " << pPlayer->getId()
+            << " (Score: " << pPlayer->getScore()
+            << ", Tier: " << pPlayer->getTier() << ")" << std::endl;
     }
 
     // Randomly decide the winning team (Black or White)
@@ -48,27 +48,33 @@ void BattleRoom::startBattle()
     std::cout << "\n" << (blackTeamWins ? "Black" : "White") << " Team wins!" << std::endl;
 
     // Update scores for winning and losing teams
-    for (auto& player : winningTeam)
+    for (auto& pPlayer : winningTeam)
     {
-        player->addScore(50); // Winner gets 50 points
-        player->addWin();
-        player->updateStats(); // Update player stats like level
+        if (pPlayer == nullptr)
+        {
+			continue;
+        }
+		BattleManager::instance().PlayerWin(pPlayer);
 
-        std::cout << "  Player " << player->getId()
-            << " gets +50 points, new score: " << player->getScore()
-            << ", new tier: " << player->getTier() << std::endl;
+        std::cout << "  Player " << pPlayer->getId()
+            << " gets +50 points, new score: " << pPlayer->getScore()
+            << ", new tier: " << pPlayer->getTier() << std::endl;
+        PlayerManager::instance().playerLogout(pPlayer->getId());
     }
 
-    for (auto& player : losingTeam)
+    for (auto& pPlayer : losingTeam)
     {
-        player->addScore(-50); // Loser loses 50 points
-        player->updateStats(); // Update player stats like level
+        if (pPlayer == nullptr)
+        {
+            continue;
+        }
+        BattleManager::instance().PlayerLose(pPlayer);
 
-        std::cout << "  Player " << player->getId()
-            << " loses 50 points, new score: " << player->getScore()
-            << ", new tier: " << player->getTier() << std::endl;
+        std::cout << "  Player " << pPlayer->getId()
+            << " loses 50 points, new score: " << pPlayer->getScore()
+            << ", new tier: " << pPlayer->getTier() << std::endl;
+        PlayerManager::instance().playerLogout(pPlayer->getId());
     }
-
     std::cout << "----- BATTLE ENDS -----\n" << std::endl;
 }
 
@@ -81,15 +87,14 @@ MatchQueue::~MatchQueue()
 {
 }
 
-void MatchQueue::addPlayer(Player* player)
+void MatchQueue::addPlayer(Player* pPlayer)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    uint32_t tier = player->getTier(); // Get player's tier
-    tierQueues[tier].push_back(player);
+    uint32_t tier = pPlayer->getTier(); // Get player's tier
+    tierQueues[tier].push_back(pPlayer);
 
-    std::cout << "Player " << player->getId()
-        << " added to match queue for tier " << tier << std::endl;
+    std::cout << "Player " << pPlayer->getId() << " added to match queue for tier " << tier << std::endl;
 }
 
 bool MatchQueue::hasEnoughPlayersForTier(uint32_t tier) // Changed to tier
@@ -175,9 +180,30 @@ void BattleManager::stopMatchmaking()
     }
 }
 
-void BattleManager::addPlayerToQueue(Player* player)
+void BattleManager::addPlayerToQueue(Player* pPlayer)
 {
-    matchQueue.addPlayer(player);
+    matchQueue.addPlayer(pPlayer);
+}
+
+void BattleManager::PlayerWin(Player* pPlayer)
+{
+    if (pPlayer == nullptr)
+    {
+		return;
+    }
+	pPlayer->addWins();
+    pPlayer->addScore(BattleResult::WINNER_SCORE);
+    pPlayer->save();
+}
+
+void BattleManager::PlayerLose(Player* pPlayer)
+{
+    if (pPlayer == nullptr)
+    {
+        return;
+    }
+    pPlayer->subScore(BattleResult::LOSER_SCORE);
+	pPlayer->save();
 }
 
 void BattleManager::matchmakingThread()

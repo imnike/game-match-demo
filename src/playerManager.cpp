@@ -1,43 +1,17 @@
-#include "..\include\playerManager.h"
-#include "..\include\dbManager.h"
+#include "playerManager.h"
+#include "dbManager.h"
+#include "battleManager.h"
 #include "..\utils\timeUtils.h"
+#include "..\include\globalDefine.h"
 #include <iostream>
 #include <chrono>
 #include <vector>
-
-Player::Player(uint64_t id, uint32_t score, uint32_t wins, time_t updateTime)
-    : m_id(id), m_score(score), m_wins(wins), m_updatedTime(updateTime)
-{
-}
-
-Player::~Player()
-{
-}
-
-uint32_t Player::getTier() const
-{
-	return (m_score / 200);   // hidden tier
-}
-
-void Player::addScore(uint32_t scoreChange)
-{
-    m_score += scoreChange;
-    updateStats();
-}
-
-void Player::addWin()
-{
-    m_wins++;
-    updateStats();
-}
-
-void Player::updateStats()
-{
-	m_updatedTime = DemoTimeUtils::getTimestampMS();
-}
+#include <memory>
+#include <algorithm>
 
 PlayerManager& PlayerManager::instance()
 {
+	// singleton instance
     static PlayerManager instance;
     return instance;
 }
@@ -53,41 +27,25 @@ PlayerManager::~PlayerManager()
 bool PlayerManager::initialize()
 {
     mapPlayers.clear();
-	setOnlinePlayerIds.clear();
+    setOnlinePlayerIds.clear();
     return true;
 }
 
 void PlayerManager::release()
 {
-    std::lock_guard<std::mutex> lock(mutex);
-
-    for (auto& pair : mapPlayers)
-    {
-        delete pair.second;
-        pair.second = nullptr;
-    }
+    std::lock_guard<std::mutex> lock(mapPlayersMutex);
 
     mapPlayers.clear();
     setOnlinePlayerIds.clear();
 }
 
-void PlayerManager::syncPlayer(uint64_t id, uint32_t score, uint32_t wins, time_t updatedTime)
-{
-    if (mapPlayers.find(id) != mapPlayers.end())
-    {
-		std::cerr << "Player " << id << " already exists." << std::endl;
-        return;
-    }
-    Player* player = new Player(id, score, wins, updatedTime);
-	mapPlayers[id] = player;
-}
-
 Player* PlayerManager::playerLogin(uint64_t id)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard<std::mutex> lock(mapPlayersMutex);
+
     if (id == 0)
     {
-        // 新增玩家資料到db
+		// insert new player
         id = DbManager::instance().insertPlayerBattles();
         if (id == 0)
         {
@@ -96,22 +54,23 @@ Player* PlayerManager::playerLogin(uint64_t id)
         }
         std::cout << "New player created with ID: " << id << std::endl;
     }
-    Player* pPlayer = getPlayer(id);    // 新創成功後, 取得玩家資料
+
+    Player* pPlayer = _getPlayerNoLock(id);
     if (pPlayer == nullptr)
     {
         std::cout << "Player " << id << " not found." << std::endl;
         return nullptr;
     }
-	std::cout << "Player " << id << " login." << std::endl;
-	setPlayerOnline(id, true);
+    std::cout << "Player " << id << " login." << std::endl;
+    _setPlayerOnlineNoLock(id, true);
     return pPlayer;
 }
 
 bool PlayerManager::playerLogout(uint64_t id)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard<std::mutex> lock(mapPlayersMutex);
 
-	Player* pPlayer = getPlayer(id);
+    Player* pPlayer = _getPlayerNoLock(id);
     if (pPlayer == nullptr)
     {
         std::cout << "Player " << id << " is not logged in." << std::endl;
@@ -119,14 +78,42 @@ bool PlayerManager::playerLogout(uint64_t id)
     }
 
     std::cout << "Player " << id << " logout." << std::endl;
-	setPlayerOnline(id, false);
+    _setPlayerOnlineNoLock(id, false);
     return true;
 }
 
-Player* PlayerManager::getPlayer(uint64_t id)
+bool PlayerManager::isPlayerOnline(uint64_t id)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-    
+    std::lock_guard<std::mutex> lock(mapPlayersMutex);
+
+    return (setOnlinePlayerIds.find(id) != setOnlinePlayerIds.end());
+}
+
+std::vector<Player*> PlayerManager::getOnlinePlayers() 
+{
+    std::lock_guard<std::mutex> lock(mapPlayersMutex);
+
+    std::vector<Player*> tmpVecPlayers;
+    for (auto& id : setOnlinePlayerIds) 
+    {
+        Player* pPlayer = _getPlayerNoLock(id);
+        if (pPlayer == nullptr)
+        {
+            continue;
+        }
+        tmpVecPlayers.push_back(pPlayer);
+    }
+    return tmpVecPlayers;
+}
+
+// *** only for dbManager to sync player data from db ***
+void PlayerManager::syncPlayerFromDbNoLock(uint64_t id, uint32_t score, uint32_t wins, uint64_t updatedTime)
+{
+	_syncPlayerNoLock(id, score, wins, updatedTime);
+}
+
+Player* PlayerManager::_getPlayerNoLock(uint64_t id)
+{
     if (mapPlayers.empty())
     {
         return nullptr;
@@ -134,16 +121,14 @@ Player* PlayerManager::getPlayer(uint64_t id)
     auto it = mapPlayers.find(id);
     if (it != mapPlayers.end())
     {
-        return it->second;
+        return it->second.get();
     }
-
     return nullptr;
 }
 
-void PlayerManager::setPlayerOnline(uint64_t id, bool isOnline)
+void PlayerManager::_setPlayerOnlineNoLock(uint64_t id, bool isOnline)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-	if (isOnline == true)
+    if (isOnline == true)
     {
         setOnlinePlayerIds.emplace(id);
     }
@@ -153,22 +138,123 @@ void PlayerManager::setPlayerOnline(uint64_t id, bool isOnline)
     }
 }
 
-bool PlayerManager::isPlayerOnline(uint64_t id)
+void PlayerManager::_syncPlayerNoLock(uint64_t id, uint32_t score, uint32_t wins, uint64_t updatedTime)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-	return (setOnlinePlayerIds.find(id) != setOnlinePlayerIds.end());
+    if (mapPlayers.find(id) != mapPlayers.end())
+    {
+        std::cerr << "Player " << id << " already exists." << std::endl;
+        return;
+    }
+    std::unique_ptr<Player> uPlayer = std::make_unique<Player>(id, score, wins, updatedTime);
+    mapPlayers[id] = std::move(uPlayer);
 }
 
-void PlayerManager::getOnlinePlayers(std::vector<Player*>& refVecPlayers)
+// --- 排行榜相關方法實作 ---
+
+// 啟動排行榜更新執行緒
+void PlayerManager::startLeaderboardUpdateThread(std::chrono::seconds intervalSeconds)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-    refVecPlayers.clear();
-    for (auto& it : setOnlinePlayerIds)
+    if (m_running.load()) 
     {
-		Player* pPlayer = getPlayer(it);
-        if (pPlayer != nullptr)
-        {
-            refVecPlayers.push_back(pPlayer);
-		}
+        // 使用 load() 檢查原子變數
+        std::cout << "排行榜更新執行緒已在運行中。\n";
+        return;
     }
+    m_running.store(true); // 使用 store() 設定原子變數
+    // 創建並啟動執行緒，傳遞成員函數指針和對象指針
+    m_leaderboardThread = std::thread(&PlayerManager::leaderboardUpdateLoop, this, intervalSeconds);
+    std::cout << "排行榜更新執行緒已啟動，更新間隔為 " << intervalSeconds.count() << " 秒。\n";
+}
+
+// 停止排行榜更新執行緒
+void PlayerManager::stopLeaderboardUpdateThread()
+{
+    if (m_running.load()) 
+    {
+        m_running.store(false); // 通知執行緒停止運行
+        if (m_leaderboardThread.joinable())
+        {
+            m_leaderboardThread.join(); // 等待執行緒安全地結束
+        }
+        std::cout << "排行榜更新執行緒已停止。\n";
+    }
+}
+
+// 排行榜更新執行緒的迴圈函式
+void PlayerManager::leaderboardUpdateLoop(std::chrono::seconds interval)
+{
+    while (m_running.load()) 
+    { // 只要 m_running 為 true 就一直運行
+        // 執行排行榜的計算和緩存更新
+        calculateAndCacheLeaderboard();
+        // 睡眠指定的時間間隔
+        std::this_thread::sleep_for(interval);
+    }
+}
+
+// 實際計算並緩存排行榜數據
+void PlayerManager::calculateAndCacheLeaderboard()
+{
+    std::vector<PlayerRankInfo> currentRanks;
+
+    // 鎖定 mapPlayersMutex 以安全地讀取所有玩家數據
+    // 這確保了在讀取 mapPlayers 時，沒有其他執行緒在修改它
+    {
+        std::lock_guard<std::mutex> lock(mapPlayersMutex);
+        currentRanks.reserve(mapPlayers.size()); // 預留空間以提高效能
+        for (const auto& pair : mapPlayers) 
+        {
+            Player* pPlayer = pair.second.get();
+            if (pPlayer) 
+            {
+                // 將 Player 物件的數據複製到 PlayerRankInfo
+                currentRanks.push_back({ pPlayer->getId(), pPlayer->getScore(), pPlayer->getWins() });
+            }
+        }
+    } // mapPlayersMutex 在這裡自動解鎖
+
+    // 對複製出來的數據進行排序
+    // 這裡不需要鎖定，因為 currentRanks 是這個函式的局部變數
+    std::sort(currentRanks.begin(), currentRanks.end(),
+        [](const PlayerRankInfo& a, const PlayerRankInfo& b) 
+        {
+            if (a.m_score != b.m_score) 
+            {
+                return a.m_score > b.m_score; // 分數高者優先 (降序)
+            }
+            if (a.m_wins != b.m_wins) 
+            {
+                return a.m_wins > b.m_wins;   // 勝場多者優先 (降序)
+            }
+            return a.m_id < b.m_id;           // ID 小的優先 (升序，作為穩定排序)
+        });
+
+    // 鎖定排行榜緩存 mutex，更新緩存數據
+    // 這確保了在更新緩存時，沒有其他執行緒在讀取它
+    {
+        std::lock_guard<std::mutex> lock(m_cachedLeaderboardMutex);
+        m_vecCachedLeaderboard = std::move(currentRanks); // 使用 std::move 高效地轉移數據
+    } // m_cachedLeaderboardMutex 在這裡自動解鎖
+    // std::cout << "排行榜已更新。總計 " << m_cachedLeaderboard.size() << " 位玩家。\n"; // 可以打開用於調試
+}
+
+// 取得緩存的排行榜資料 (客戶端呼叫這個來獲取排行榜)
+std::vector<PlayerRankInfo> PlayerManager::getLeaderboard(size_t topN)
+{
+    std::lock_guard<std::mutex> lock(m_cachedLeaderboardMutex); // 鎖定以讀取緩存
+
+    std::vector<PlayerRankInfo> result;
+    result.reserve(std::min(topN, m_vecCachedLeaderboard.size())); // 預留空間以提高效能
+
+    size_t count = 0;
+    for (const auto& rank : m_vecCachedLeaderboard)
+    {
+        if (count >= topN) 
+        {
+            break; // 達到指定數量就停止
+        }
+        result.push_back(rank); // 複製數據到結果向量
+        count++;
+    }
+    return result;
 }

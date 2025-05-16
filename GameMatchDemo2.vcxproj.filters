@@ -22,6 +22,9 @@
     <Filter Include="utils">
       <UniqueIdentifier>{e3882a7a-a985-49ff-9495-f35e1e409be8}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\objects">
+      <UniqueIdentifier>{3c7f949d-d8a3-49af-b6e7-92b70b21bafe}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sqlite\sqlite3.h">
@@ -30,14 +33,20 @@
     <ClInclude Include="utils\timeUtils.h">
       <Filter>utils</Filter>
     </ClInclude>
-    <ClInclude Include="include\battleManager.h">
+    <ClInclude Include="src\battleManager.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\dbManager.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\playerManager.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="include\globalDefine.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\dbManager.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="include\playerManager.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\objects\player.h">
+      <Filter>src\objects</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -58,6 +67,9 @@
     </ClCompile>
     <ClCompile Include="src\playerManager.cpp">
       <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\objects\player.cpp">
+      <Filter>src\objects</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

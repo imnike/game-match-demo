@@ -123,10 +123,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="include\battleManager.h" />
-    <ClInclude Include="include\dbManager.h" />
-    <ClInclude Include="include\playerManager.h" />
+    <ClInclude Include="include\globalDefine.h" />
     <ClInclude Include="sqlite\sqlite3.h" />
+    <ClInclude Include="src\battleManager.h" />
+    <ClInclude Include="src\dbManager.h" />
+    <ClInclude Include="src\objects\player.h" />
+    <ClInclude Include="src\playerManager.h" />
     <ClInclude Include="utils\timeUtils.h" />
   </ItemGroup>
   <ItemGroup>
@@ -134,6 +136,7 @@
     <ClCompile Include="src\battleManager.cpp" />
     <ClCompile Include="src\dbManager.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\objects\player.cpp" />
     <ClCompile Include="src\playerManager.cpp" />
     <ClCompile Include="utils\timeUtils.cpp" />
   </ItemGroup>

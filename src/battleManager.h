@@ -1,15 +1,12 @@
 #ifndef BATTLE_MANAGER_H
 #define BATTLE_MANAGER_H
 
-#include "..\include\playerManager.h" // Include for Player class
+#include "playerManager.h"
 #include <vector>
 #include <map>
 #include <mutex>
 #include <thread>
-#include <cstdint> // For uint32_t
-
-// Forward declaration for BattleManager singleton
-class BattleManager;
+#include <cstdint> 
 
 // --- BattleRoom Class ---
 class BattleRoom
@@ -32,7 +29,7 @@ public:
     MatchQueue();
     ~MatchQueue();
 
-    void addPlayer(Player* player);
+    void addPlayer(Player* pPlayer);
     // Renamed from hasEnoughPlayersForLevel to reflect tier-based matchmaking
     bool hasEnoughPlayersForTier(uint32_t tier);
     // Renamed from getPlayersForMatch (level) to getPlayersForMatch (tier)
@@ -59,7 +56,9 @@ public:
 
     void startMatchmaking();
     void stopMatchmaking();
-    void addPlayerToQueue(Player* player);
+    void addPlayerToQueue(Player* pPlayer);
+	void PlayerWin(Player* pPlayer);
+	void PlayerLose(Player* pPlayer);
 
 private:
     BattleManager(); // Private constructor for singleton

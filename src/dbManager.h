@@ -30,24 +30,15 @@ public:
     void syncAllPlayerBattles();
     uint64_t insertPlayerBattles();
     bool updatePlayerBattles(uint64_t id, uint32_t score, uint32_t wins);
-    bool queryPlayerBattles(uint64_t id, uint32_t& score, uint32_t& wins, time_t& updateTime);
+    bool queryPlayerBattles(uint64_t id, uint32_t& score, uint32_t& wins, uint64_t& updateTime);
 
-    struct PlayerRank
-    {
-        uint64_t id;
-        uint32_t score;
-        uint32_t wins;
-        time_t updateTime;
-    };
-
-    std::vector<PlayerRank> getTopPlayers();
 
 private:
     DbManager();
 
     sqlite3* pDbHandler = nullptr;
     std::string dbName = "";
-    std::unordered_map<std::string, std::function<void()>> mapFuncSyncData = {};
+    std::unordered_map<std::string, std::function<void()>> mapFuncSyncData{};
 };
 
 #endif // DB_MANAGER_H
