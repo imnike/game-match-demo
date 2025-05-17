@@ -1,4 +1,7 @@
-// dbManager.cpp
+// @file  : dbManager.cpp
+// @brief : 資料庫管理
+// @author: August
+// @date  : 2025-05-15
 #include "dbManager.h"
 #include "playerManager.h"
 #include "../sqlite/sqlite3.h"
@@ -23,7 +26,7 @@ DbManager::DbManager()
 
 DbManager::~DbManager()
 {
-    if (pDbHandler != nullptr)
+    if (pDbHandler)
     {
         sqlite3_close(pDbHandler);
         pDbHandler = nullptr;
@@ -34,7 +37,7 @@ bool DbManager::initialize()
 {
 	mapFuncSyncData.clear();
     mapFuncSyncData["player_battles"] = [this]() { this->syncAllPlayerBattles(); };
-    if (pDbHandler != nullptr)
+    if (pDbHandler)
     {
         sqlite3_close(pDbHandler);
         pDbHandler = nullptr;
@@ -52,7 +55,7 @@ bool DbManager::initialize()
 
 void DbManager::release()
 {
-    if (pDbHandler != nullptr)
+    if (pDbHandler)
     {
         sqlite3_close(pDbHandler);
         pDbHandler = nullptr;
