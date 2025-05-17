@@ -8,38 +8,36 @@
 #include "../utils/utils.h"
 #include <iostream>
 #include <algorithm>
-#include <memory>
 #include <random>
 #include <thread>
 #include <chrono>
 
-// --- BattleRoom Implementation ---
 BattleRoom::BattleRoom(const std::vector<Player*>& refVecTeamRed, const std::vector<Player*>& refVecTeamBlue)
+    : m_roomId(BattleManager::instance().getNextRoomId()) // 在構造時獲取並設置 roomId
 {
-    // 遍歷原始 Player 指標，為每個 Player 創建一個全新的副本
-    for (Player* pPlayer : refVecTeamRed) 
+    for (Player* pPlayer : refVecTeamRed)
     {
         if (pPlayer)
         {
-            // 使用 std::make_unique<Player>(*p) 來調用 Player 的拷貝建構子，
-            // 在堆上創建一個新的 Player 物件副本，並將其包裝在 std::unique_ptr 中。
-            pPlayer->setStatus(common::battle);
+            pPlayer->setStatus(common::PlayerStatus::battle);
             m_vecTeamRed.emplace_back(std::make_unique<Hero>(pPlayer->getId()));
         }
     }
 
-    for (Player* pPlayer : refVecTeamBlue) 
+    for (Player* pPlayer : refVecTeamBlue)
     {
-        if (pPlayer) 
+        if (pPlayer)
         {
-            pPlayer->setStatus(common::battle);
+            pPlayer->setStatus(common::PlayerStatus::battle);
             m_vecTeamBlue.emplace_back(std::make_unique<Hero>(pPlayer->getId()));
         }
     }
+    std::cout << "Battle Room " << m_roomId << " created." << std::endl;
 }
 
 BattleRoom::~BattleRoom()
 {
+    std::cout << "Battle Room " << m_roomId << " destroyed." << std::endl;
 }
 
 void BattleRoom::startBattle()
@@ -65,56 +63,45 @@ void BattleRoom::startBattle()
     }
     std::cout << std::endl;
 
-    // 顯示戰鬥開始狀態
-    std::cout << "\n----- BATTLE STARTS -----" << std::endl;
+    std::cout << "\n----- BATTLE STARTS (Room " << m_roomId << ") -----" << std::endl;
 
-    // ** 加入延遲點 1: 模擬戰鬥過程 **
-    std::this_thread::sleep_for(std::chrono::seconds(3)); // 延遲 3 秒
+    // 模擬戰鬥過程
+    std::this_thread::sleep_for(std::chrono::seconds(3));
 
-    // 隨機決定獲勝隊伍 (紅隊或藍隊)
-    // random_utils::getRandom(2) 會返回 0 或 1。
-    // 如果返回 0 則紅隊贏，返回 1 則藍隊贏
     uint8_t dice = 2;
     bool isRedWin = (random_utils::getRandom(dice) == 0);
 
     std::vector<std::unique_ptr<Hero>>& vecWinningTeam = isRedWin ? m_vecTeamRed : m_vecTeamBlue;
     std::vector<std::unique_ptr<Hero>>& vecLosingTeam = isRedWin ? m_vecTeamBlue : m_vecTeamRed;
 
-    std::cout << "\n" << (isRedWin ? "Red" : "Blue") << " Team wins!!!" << std::endl;
+    std::cout << "\n" << (isRedWin ? "Red" : "Blue") << " Team wins in Room " << m_roomId << "!!!" << std::endl;
 
-    // 更新獲勝隊伍和落敗隊伍的分數
     for (auto& pHero : vecWinningTeam)
     {
-        if (!pHero)
-        {
-            continue;
-        }
+        if (!pHero) continue;
         const uint64_t playerId = pHero->getPlayerId();
         BattleManager::instance().PlayerWin(playerId);
     }
 
     for (auto& pHero : vecLosingTeam)
     {
-        if (!pHero)
-        {
-            continue;
-        }
+        if (!pHero) continue;
         const uint64_t playerId = pHero->getPlayerId();
         BattleManager::instance().PlayerLose(playerId);
     }
-    std::cout << "----- BATTLE ENDS -----\n" << std::endl;
+    std::cout << "----- BATTLE ENDS (Room " << m_roomId << ") -----\n" << std::endl;
+
+    // 戰鬥結束，通知 BattleManager 移除該房間
+    finishBattle();
 }
 
 void BattleRoom::finishBattle()
 {
-    // 在這裡可以添加結束戰鬥的邏輯，例如釋放資源、更新玩家狀態等
-    std::cout << "Battle finished." << std::endl;
-
-	// 回存玩家資料??
-   
-    // 釋放隊伍成員的記憶體
+    std::cout << "Battle finished for Room " << m_roomId << "." << std::endl;
     m_vecTeamRed.clear();
-	m_vecTeamBlue.clear();
+    m_vecTeamBlue.clear();
+    // 通知 BattleManager 移除這個房間
+    BattleManager::instance().removeBattleRoom(m_roomId);
 }
 
 // --- TeamMatchQueue Implementation (保持不變) ---
@@ -124,38 +111,53 @@ TeamMatchQueue::~TeamMatchQueue() {}
 void TeamMatchQueue::addMember(Player* pPlayer)
 {
     std::lock_guard<std::mutex> lock(mutex);
-
     uint32_t tier = pPlayer->getTier();
-    mapTierQueues[tier].push_back(pPlayer);
-
+    m_mapTierQueues[tier].push_back(pPlayer);
     std::cout << "Player " << pPlayer->getId() << " added to TEAM match queue for tier " << tier << std::endl;
 }
 
 bool TeamMatchQueue::hasEnoughMemberForTeam(uint32_t tier)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    auto it = mapTierQueues.find(tier);
-    return it != mapTierQueues.end() && it->second.size() >= 3;
+    auto it = m_mapTierQueues.find(tier);
+    return it != m_mapTierQueues.end() && it->second.size() >= 3;
 }
 
 std::vector<Player*> TeamMatchQueue::getPlayersForTeam(uint32_t tier)
 {
     std::lock_guard<std::mutex> lock(mutex);
     std::vector<Player*> teamPlayers;
-    auto it = mapTierQueues.find(tier);
+    auto it = m_mapTierQueues.find(tier);
 
-    if (it != mapTierQueues.end() && it->second.size() >= 3)
+    if (it != m_mapTierQueues.end() && it->second.size() >= 3)
     {
         teamPlayers.assign(it->second.begin(), it->second.begin() + 3);
         it->second.erase(it->second.begin(), it->second.begin() + 3);
-
         if (it->second.empty())
         {
-            mapTierQueues.erase(it);
+            m_mapTierQueues.erase(it);
         }
     }
     return teamPlayers;
 }
+
+const std::map<uint32_t, std::vector<Player*>> TeamMatchQueue::getTierQueue() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+	return m_mapTierQueues;
+}
+
+void TeamMatchQueue::clear()
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    _clearNoLock();
+}
+
+void TeamMatchQueue::_clearNoLock()
+{
+    m_mapTierQueues.clear();
+}
+
 
 // --- BattleMatchQueue Implementation (保持不變) ---
 BattleMatchQueue::BattleMatchQueue() {}
@@ -164,14 +166,13 @@ BattleMatchQueue::~BattleMatchQueue() {}
 void BattleMatchQueue::addTeam(std::vector<Player*> team)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    if (team.empty()) {
-        return;
-    }
-    uint32_t tier = team[battle_constant::TeamColor::Red]->getTier();
-    mapTierQueues[tier].push_back(team);
+    if (team.empty()) { return; }
+    uint32_t tier = team[0]->getTier(); // 假設隊伍成員的 Tier 相同
+    m_mapTierQueues[tier].emplace_back(team);
 
     std::cout << "Team (Tier " << tier << ") added to BATTLE match queue. Players: ";
-    for (Player* p : team) {
+    for (Player* p : team)
+    {
         std::cout << p->getId() << " ";
     }
     std::cout << std::endl;
@@ -180,30 +181,45 @@ void BattleMatchQueue::addTeam(std::vector<Player*> team)
 bool BattleMatchQueue::hasEnoughTeamsForBattle(uint32_t tier)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    auto it = mapTierQueues.find(tier);
-    return it != mapTierQueues.end() && it->second.size() >= battle_constant::TeamColor::Max;
+    auto it = m_mapTierQueues.find(tier);
+    return it != m_mapTierQueues.end() && it->second.size() >= battle_constant::TeamColor::Max;
 }
 
 std::vector<std::vector<Player*>> BattleMatchQueue::getTeamsForBattle(uint32_t tier)
 {
     std::lock_guard<std::mutex> lock(mutex);
     std::vector<std::vector<Player*>> battleTeams;
-    auto it = mapTierQueues.find(tier);
+    auto it = m_mapTierQueues.find(tier);
 
-    if (it != mapTierQueues.end() && it->second.size() >= battle_constant::TeamColor::Max)
+    if (it != m_mapTierQueues.end() && it->second.size() >= battle_constant::TeamColor::Max)
     {
         battleTeams.assign(it->second.begin(), it->second.begin() + 2);
         it->second.erase(it->second.begin(), it->second.begin() + 2);
-
         if (it->second.empty())
         {
-            mapTierQueues.erase(it);
+            m_mapTierQueues.erase(it);
         }
     }
     return battleTeams;
 }
 
-// --- BattleManager Implementation (Singleton) ---
+const std::map<uint32_t, std::vector<std::vector<Player*>>> BattleMatchQueue::getTierQueue() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+	return m_mapTierQueues;
+}
+
+void BattleMatchQueue::clear()
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    _clearNoLock();
+}
+
+void BattleMatchQueue::_clearNoLock()
+{
+    m_mapTierQueues.clear();
+}
+
 BattleManager& BattleManager::instance()
 {
     static BattleManager instance;
@@ -216,51 +232,78 @@ BattleManager::BattleManager()
 
 BattleManager::~BattleManager()
 {
+    stopMatchmaking(); // 確保線程安全退出
+    // 清空所有戰鬥房間
+    std::lock_guard<std::mutex> lock(m_battleRoomsMutex);
+    m_battleRooms.clear();
 }
 
 bool BattleManager::initialize()
 {
-    //startMatchmaking();
-    isRunning = false;
+    m_isRunning = false;
     return true;
 }
 
 void BattleManager::release()
 {
     stopMatchmaking();
+
+    std::unique_lock<std::mutex> lockBattleRooms(m_battleRoomsMutex, std::defer_lock);
+    std::unique_lock<std::mutex> lockTeamQueue(m_teamMatchQueue.mutex, std::defer_lock);
+    std::unique_lock<std::mutex> lockBattleQueue(m_battleMatchQueue.mutex, std::defer_lock);
+
+    std::lock(lockBattleRooms, lockTeamQueue, lockBattleQueue);
+
+    m_battleRooms.clear();
+    m_teamMatchQueue._clearNoLock();
+    m_battleMatchQueue._clearNoLock();
+
+    m_nextRoomId.store(0);
 }
 
 void BattleManager::startMatchmaking()
 {
-    if (!isRunning)
+    if (!m_isRunning)
     {
-        isRunning = true;
-        matchmakingThreadHandle = std::thread(&BattleManager::matchmakingThread, this);
+        m_isRunning = true;
+        m_matchmakingThreadHandle = std::thread(&BattleManager::matchmakingThread, this);
     }
 }
 
 void BattleManager::stopMatchmaking()
 {
-    if (isRunning)
+    if (m_isRunning)
     {
-        isRunning = false;
-        if (matchmakingThreadHandle.joinable())
+        m_isRunning = false;
+        if (m_matchmakingThreadHandle.joinable())
         {
-            matchmakingThreadHandle.join();
+            m_matchmakingThreadHandle.join();
         }
     }
 }
 
 void BattleManager::addPlayerToQueue(Player* pPlayer)
 {
-    teamMatchQueue.addMember(pPlayer);
-    pPlayer->setStatus(common::PlayerStatus::queue);
+    if (!pPlayer)
+    {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(m_playerAddQueueMutex);
+    {
+        if (pPlayer->isInLobby() == false)
+        {
+            //std::cerr << "Error: Player " << pPlayer->getId() << " is not in lobby." << std::endl;
+            return;
+        }
+        m_teamMatchQueue.addMember(pPlayer);
+        pPlayer->setStatus(common::PlayerStatus::queue);
+    }
 }
 
 void BattleManager::PlayerWin(uint64_t playerId)
 {
     std::cout << "Player " << playerId << " WIN!!! (+ " << battle_constant::WINNER_SCORE << " points)" << std::endl;
-	PlayerManager::instance().handlePlayerBattleResult(playerId, battle_constant::WINNER_SCORE, true);
+    PlayerManager::instance().handlePlayerBattleResult(playerId, battle_constant::WINNER_SCORE, true);
 }
 
 void BattleManager::PlayerLose(uint64_t playerId)
@@ -269,37 +312,62 @@ void BattleManager::PlayerLose(uint64_t playerId)
     PlayerManager::instance().handlePlayerBattleResult(playerId, battle_constant::LOSER_SCORE, false);
 }
 
+// 獲取下一個自動增長的房間 ID
+uint64_t BattleManager::getNextRoomId()
+{
+    // 使用 fetch_add 方法實現原子性的自增操作，返回舊值
+    return m_nextRoomId.fetch_add(1);
+}
+
+// BattleRoom 調用此函數來請求管理器移除自己
+void BattleManager::removeBattleRoom(uint64_t roomId)
+{
+    // 保護 m_battleRooms 的修改操作，與 getNextRoomId() 使用不同的機制，但不會衝突
+    std::lock_guard<std::mutex> lock(m_battleRoomsMutex);
+    auto it = m_battleRooms.find(roomId);
+    if (it != m_battleRooms.end())
+    {
+        m_battleRooms.erase(it); // unique_ptr 會在此處自動調用 BattleRoom 的析構函數
+        std::cout << "Removed Battle Room " << roomId << " from manager." << std::endl;
+    }
+    else
+    {
+        std::cerr << "Error: Attempted to remove non-existent Battle Room " << roomId << std::endl;
+    }
+}
+
 void BattleManager::matchmakingThread()
 {
     std::cout << "Matchmaking thread started" << std::endl;
 
-    while (isRunning)
+    while (m_isRunning)
     {
-        // --- 階段一：玩家到隊伍 (Player to Team) ---
+        // 1. 
         std::vector<uint32_t> tiersToFormTeams;
         {
-            std::lock_guard<std::mutex> lock(teamMatchQueue.mutex);
-            for (const auto& queuePair : teamMatchQueue.mapTierQueues)
+            std::lock_guard<std::mutex> lock(m_teamMatchQueue.mutex);
+            for (const auto& queuePair : m_teamMatchQueue.m_mapTierQueues)
             {
-                tiersToFormTeams.push_back(queuePair.first);
+                tiersToFormTeams.emplace_back(queuePair.first);
             }
         }
 
         for (uint32_t tier : tiersToFormTeams)
         {
-            if (teamMatchQueue.hasEnoughMemberForTeam(tier))
+            if (m_teamMatchQueue.hasEnoughMemberForTeam(tier))
             {
-                std::vector<Player*> newTeam = teamMatchQueue.getPlayersForTeam(tier);
+                std::vector<Player*> newTeam = m_teamMatchQueue.getPlayersForTeam(tier);
 
                 if (newTeam.size() == 3)
                 {
-                    std::cout << "  Formed a 3-player team for tier " << tier << ". Players: ";
-                    for (Player* p : newTeam) {
+                    std::cout << "Formed a 3-player team for tier " << tier << ". Players: ";
+                    for (Player* p : newTeam) 
+                    {
                         std::cout << p->getId() << " ";
                     }
                     std::cout << std::endl;
 
-                    battleMatchQueue.addTeam(newTeam);
+                    m_battleMatchQueue.addTeam(newTeam);
                 }
                 else {
                     std::cerr << "Warning: getPlayersForTeam returned incorrect number of players for tier " << tier << std::endl;
@@ -310,26 +378,60 @@ void BattleManager::matchmakingThread()
         // --- 階段二：隊伍到戰鬥 (Team to Battle) ---
         std::vector<uint32_t> tiersToStartBattles;
         {
-            std::lock_guard<std::mutex> lock(battleMatchQueue.mutex);
-            for (const auto& queuePair : battleMatchQueue.mapTierQueues)
+            std::lock_guard<std::mutex> lock(m_battleMatchQueue.mutex);
+            for (const auto& queuePair : m_battleMatchQueue.m_mapTierQueues)
             {
-                tiersToStartBattles.push_back(queuePair.first);
+                tiersToStartBattles.emplace_back(queuePair.first);
             }
         }
 
         for (uint32_t tier : tiersToStartBattles)
         {
-            if (battleMatchQueue.hasEnoughTeamsForBattle(tier))
+            if (m_battleMatchQueue.hasEnoughTeamsForBattle(tier))
             {
-                std::vector<std::vector<Player*>> battleTeams = battleMatchQueue.getTeamsForBattle(tier);
+                std::vector<std::vector<Player*>> battleTeams = m_battleMatchQueue.getTeamsForBattle(tier);
 
                 if (battleTeams.size() == battle_constant::TeamColor::Max)
                 {
-                    std::cout << "\n  Matched 2 teams for tier " << tier << ". Initiating battle!\n";
+                    std::cout << "\nMatched 2 teams for tier " << tier << ". Initiating battle!\n";
 
-                    // 將第一支隊伍設為紅隊，第二支為藍隊
-                    BattleRoom room(battleTeams[battle_constant::TeamColor::Red], battleTeams[battle_constant::TeamColor::Blue]);
-                    room.startBattle();
+                    std::unique_ptr<BattleRoom> room_ptr;
+                    uint64_t roomIdForThread = 0;
+
+                    // 1. 在鎖定 m_battleRoomsMutex 的情況下創建 BattleRoom，並將其放入 map
+                    //    注意：這裡 m_battleRoomsMutex 只保護 m_battleRooms map 的修改。
+                    //    m_nextRoomId 已經由 std::atomic 保護。
+                    {
+                        std::lock_guard<std::mutex> lock(m_battleRoomsMutex); // 鎖定 m_battleRooms
+                        room_ptr = std::make_unique<BattleRoom>(battleTeams[battle_constant::TeamColor::Red], battleTeams[battle_constant::TeamColor::Blue]);
+                        roomIdForThread = room_ptr->getRoomId(); // 獲取房間 ID (在 BattleRoom 構造函數中已原子生成)
+                        m_battleRooms[roomIdForThread] = std::move(room_ptr); // 將 unique_ptr 移動到 map 中
+                    } // 鎖在此處釋放
+
+                    // 2. 啟動一個新的 detached 線程來執行 BattleRoom 的 startBattle()
+                    std::thread battle_thread([roomIdForThread]() 
+                        {
+                        BattleRoom* battleRoomInstance = nullptr;
+                        {
+                            // 再次鎖定 m_battleRoomsMutex 來安全訪問 map
+                            std::lock_guard<std::mutex> lock(BattleManager::instance().m_battleRoomsMutex);
+                            auto it = BattleManager::instance().m_battleRooms.find(roomIdForThread);
+                            if (it != BattleManager::instance().m_battleRooms.end()) 
+                            {
+                                battleRoomInstance = it->second.get(); // 獲取裸指針
+                            }
+                        } // 鎖在此處釋放
+
+                        if (battleRoomInstance) 
+                        {
+                            battleRoomInstance->startBattle(); // 執行戰鬥，戰鬥結束後會自動調用 finishBattle
+                        }
+                        else 
+                        {
+                            std::cerr << "Error: Battle Room " << roomIdForThread << " not found for battle thread execution." << std::endl;
+                        }
+                        });
+                    battle_thread.detach(); // 分離執行緒，讓它獨立運行
                 }
                 else {
                     std::cerr << "Warning: getTeamsForBattle returned incorrect number of teams for tier " << tier << std::endl;
