@@ -4,6 +4,17 @@
 
 #include <cstdint> 
 
+namespace common
+{
+    enum PlayerStatus : uint8_t
+    {
+        offline,
+        lobby,
+        queue,
+        battle
+    };
+}
+
 // 定義戰鬥結果的常量
 namespace battle_constant
 {

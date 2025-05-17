@@ -1,7 +1,7 @@
-// @file :  battleManager.h
-// @brief:  管理戰鬥, 匹配隊伍, 處理戰鬥結果等功能
-// author:  August
-// date  :  2025-05-14
+// @file  : battleManager.cpp
+// @brief : 管理戰鬥, 匹配隊伍, 處理戰鬥結果等功能
+// @author: August
+// @date  : 2025-05-15
 #include "battleManager.h"
 #include "playerManager.h"
 #include "../include/globalDefine.h"
@@ -23,7 +23,8 @@ BattleRoom::BattleRoom(const std::vector<Player*>& refVecTeamRed, const std::vec
         {
             // 使用 std::make_unique<Player>(*p) 來調用 Player 的拷貝建構子，
             // 在堆上創建一個新的 Player 物件副本，並將其包裝在 std::unique_ptr 中。
-            m_vecTeamRed.push_back(std::make_unique<Player>(*pPlayer));
+            pPlayer->setStatus(common::battle);
+            m_vecTeamRed.emplace_back(std::make_unique<Hero>(pPlayer->getId()));
         }
     }
 
@@ -31,7 +32,8 @@ BattleRoom::BattleRoom(const std::vector<Player*>& refVecTeamRed, const std::vec
     {
         if (pPlayer) 
         {
-            m_vecTeamBlue.push_back(std::make_unique<Player>(*pPlayer));
+            pPlayer->setStatus(common::battle);
+            m_vecTeamBlue.emplace_back(std::make_unique<Hero>(pPlayer->getId()));
         }
     }
 }
@@ -42,33 +44,32 @@ BattleRoom::~BattleRoom()
 
 void BattleRoom::startBattle()
 {
+    // 列出紅隊與藍隊成員ID
+    std::cout << "red team members: ";
+    for (const auto& pHero : m_vecTeamRed)
+    {
+        if (pHero)
+        {
+            std::cout << pHero->getPlayerId() << "(hero:" << pHero->getId() << ") ";
+        }
+    }
+    std::cout << std::endl;
+
+    std::cout << "blue team members: ";
+    for (const auto& pHero : m_vecTeamBlue)
+    {
+        if (pHero)
+        {
+            std::cout << pHero->getPlayerId() << "(hero:" << pHero->getId() << ") ";
+        }
+    }
+    std::cout << std::endl;
+
     // 顯示戰鬥開始狀態
     std::cout << "\n----- BATTLE STARTS -----" << std::endl;
-    std::cout << "Red Team (Tier " << (m_vecTeamRed.empty() ? 0 : m_vecTeamRed[0]->getTier()) << ", Players: ";
-    for (const auto& player : m_vecTeamRed)
-    {
-        std::cout << player->getId() << " ";
-    }
-    std::cout << "):" << std::endl;
-    for (const auto& pPlayer : m_vecTeamRed)
-    {
-        std::cout << "  Player " << pPlayer->getId()
-            << " (Score: " << pPlayer->getScore()
-            << ", Tier: " << pPlayer->getTier() << ")" << std::endl;
-    }
 
-    std::cout << "Blue Team (Tier " << (m_vecTeamBlue.empty() ? 0 : m_vecTeamBlue[0]->getTier()) << ", Players: ";
-    for (const auto& pPlayer : m_vecTeamBlue)
-    {
-        std::cout << pPlayer->getId() << " ";
-    }
-    std::cout << "):" << std::endl;
-    for (const auto& pPlayer : m_vecTeamBlue)
-    {
-        std::cout << "  Player " << pPlayer->getId()
-            << " (Score: " << pPlayer->getScore()
-            << ", Tier: " << pPlayer->getTier() << ")" << std::endl;
-    }
+    // ** 加入延遲點 1: 模擬戰鬥過程 **
+    std::this_thread::sleep_for(std::chrono::seconds(3)); // 延遲 3 秒
 
     // 隨機決定獲勝隊伍 (紅隊或藍隊)
     // random_utils::getRandom(2) 會返回 0 或 1。
@@ -76,40 +77,30 @@ void BattleRoom::startBattle()
     uint8_t dice = 2;
     bool isRedWin = (random_utils::getRandom(dice) == 0);
 
-    std::vector<std::unique_ptr<Player>>& vecWinningTeam = isRedWin ? m_vecTeamRed : m_vecTeamBlue;
-    std::vector<std::unique_ptr<Player>>& vecLosingTeam = isRedWin ? m_vecTeamBlue : m_vecTeamRed;
+    std::vector<std::unique_ptr<Hero>>& vecWinningTeam = isRedWin ? m_vecTeamRed : m_vecTeamBlue;
+    std::vector<std::unique_ptr<Hero>>& vecLosingTeam = isRedWin ? m_vecTeamBlue : m_vecTeamRed;
 
-    std::cout << "\n" << (isRedWin ? "Red" : "Blue") << " Team wins!" << std::endl;
+    std::cout << "\n" << (isRedWin ? "Red" : "Blue") << " Team wins!!!" << std::endl;
 
     // 更新獲勝隊伍和落敗隊伍的分數
-    for (auto& pPlayer : vecWinningTeam)
+    for (auto& pHero : vecWinningTeam)
     {
-        if (pPlayer == nullptr)
+        if (!pHero)
         {
             continue;
         }
-        BattleManager::instance().PlayerWin(pPlayer.get());
-
-        std::cout << "  Player " << pPlayer->getId()
-            << " gets +" << battle_constant::WINNER_SCORE
-            << " points, new score: " << pPlayer->getScore()
-            << ", new tier: " << pPlayer->getTier() << std::endl;
-        PlayerManager::instance().playerLogout(pPlayer->getId()); // 戰鬥結束，玩家登出
+        const uint64_t playerId = pHero->getPlayerId();
+        BattleManager::instance().PlayerWin(playerId);
     }
 
-    for (auto& pPlayer : vecLosingTeam)
+    for (auto& pHero : vecLosingTeam)
     {
-        if (pPlayer == nullptr)
+        if (!pHero)
         {
             continue;
         }
-        BattleManager::instance().PlayerLose(pPlayer.get());
-
-        std::cout << "  Player " << pPlayer->getId()
-            << " loses " << battle_constant::LOSER_SCORE
-            << " points, new score: " << pPlayer->getScore()
-            << ", new tier: " << pPlayer->getTier() << std::endl;
-        PlayerManager::instance().playerLogout(pPlayer->getId()); // 戰鬥結束，玩家登出
+        const uint64_t playerId = pHero->getPlayerId();
+        BattleManager::instance().PlayerLose(playerId);
     }
     std::cout << "----- BATTLE ENDS -----\n" << std::endl;
 }
@@ -263,24 +254,19 @@ void BattleManager::stopMatchmaking()
 void BattleManager::addPlayerToQueue(Player* pPlayer)
 {
     teamMatchQueue.addMember(pPlayer);
+    pPlayer->setStatus(common::PlayerStatus::queue);
 }
 
-void BattleManager::PlayerWin(Player* pPlayer)
+void BattleManager::PlayerWin(uint64_t playerId)
 {
-    if (pPlayer == nullptr)
-    {
-        return;
-    }
-	PlayerManager::instance().updatePlayerBattleResult(pPlayer->getId(), battle_constant::WINNER_SCORE, true);
+    std::cout << "Player " << playerId << " WIN!!! (+ " << battle_constant::WINNER_SCORE << " points)" << std::endl;
+	PlayerManager::instance().handlePlayerBattleResult(playerId, battle_constant::WINNER_SCORE, true);
 }
 
-void BattleManager::PlayerLose(Player* pPlayer)
+void BattleManager::PlayerLose(uint64_t playerId)
 {
-    if (pPlayer == nullptr)
-    {
-        return;
-    }
-    PlayerManager::instance().updatePlayerBattleResult(pPlayer->getId(), battle_constant::LOSER_SCORE, false);
+    std::cout << "Player " << playerId << " LOSE... (" << battle_constant::LOSER_SCORE << " points)" << std::endl;
+    PlayerManager::instance().handlePlayerBattleResult(playerId, battle_constant::LOSER_SCORE, false);
 }
 
 void BattleManager::matchmakingThread()

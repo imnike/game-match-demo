@@ -1,11 +1,14 @@
-// player.cpp
+// @file  : player.c
+// @brief : ª±®aª«¥ó
+// @author: August
+// @date  : 2025-05-15
 #include "player.h"
 #include "../../include/globalDefine.h"
 #include "../../utils/utils.h"
 #include "../dbManager.h"
 
 Player::Player(uint64_t id, uint32_t score, uint32_t wins, uint64_t updateTime)
-    : m_id(id), m_score(score), m_wins(wins), m_updatedTime(updateTime)
+    : m_id(id), m_score(score), m_wins(wins), m_updatedTime(updateTime), m_status(common::PlayerStatus::offline)
 {
 }
 
@@ -38,5 +41,10 @@ void Player::subScore(uint32_t scoreDelta)
 void Player::addWins()
 {
     m_wins++;
+}
+
+void Player::setStatus(common::PlayerStatus status)
+{
+    m_status = status;
 }
 

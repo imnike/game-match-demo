@@ -1,4 +1,7 @@
-// playerManager.cpp
+// @file  : playerManager.cpp
+// @brief : 管理玩家資料
+// @author: August
+// @date  : 2025-05-15
 #include "playerManager.h"
 #include "dbManager.h"
 #include "battleManager.h"
@@ -57,13 +60,14 @@ Player* PlayerManager::playerLogin(uint64_t id)
     }
 
     Player* pPlayer = _getPlayerNoLock(id);
-    if (pPlayer == nullptr)
+    if (!pPlayer)
     {
         std::cout << "Player " << id << " not found." << std::endl;
         return nullptr;
     }
-    std::cout << "Player " << id << " login." << std::endl;
+    //std::cout << "Player " << id << " login." << std::endl;
     _setPlayerOnlineNoLock(id, true);
+    pPlayer->setStatus(common::PlayerStatus::lobby);
     return pPlayer;
 }
 
@@ -72,14 +76,15 @@ bool PlayerManager::playerLogout(uint64_t id)
     std::lock_guard<std::mutex> lock(mapPlayersMutex);
 
     Player* pPlayer = _getPlayerNoLock(id);
-    if (pPlayer == nullptr)
+    if (!pPlayer)
     {
         std::cout << "Player " << id << " is not logged in." << std::endl;
         return false;
     }
 
-    std::cout << "Player " << id << " logout." << std::endl;
+    //std::cout << "Player " << id << " logout." << std::endl;
     _setPlayerOnlineNoLock(id, false);
+    pPlayer->setStatus(common::PlayerStatus::offline);
     return true;
 }
 
@@ -98,7 +103,7 @@ std::vector<Player*> PlayerManager::getOnlinePlayers()
     for (auto& id : setOnlinePlayerIds) 
     {
         Player* pPlayer = _getPlayerNoLock(id);
-        if (pPlayer == nullptr)
+        if (!pPlayer)
         {
             continue;
         }
@@ -129,7 +134,7 @@ Player* PlayerManager::_getPlayerNoLock(uint64_t id)
 
 void PlayerManager::_setPlayerOnlineNoLock(uint64_t id, bool isOnline)
 {
-    if (isOnline == true)
+    if (isOnline)
     {
         setOnlinePlayerIds.emplace(id);
     }
@@ -260,17 +265,17 @@ std::vector<PlayerRankInfo> PlayerManager::getLeaderboard(size_t topN)
     return result;
 }
 
-void PlayerManager::updatePlayerBattleResult(uint64_t playerId, uint32_t scoreDelta, bool isWin)
+void PlayerManager::handlePlayerBattleResult(uint64_t playerId, uint32_t scoreDelta, bool isWin)
 {
     {
         std::lock_guard<std::mutex> lock(mapPlayersMutex); // 保護對 m_mapPlayers 的訪問
 
         Player* pPlayer = _getPlayerNoLock(playerId);
-        if (pPlayer == nullptr)
+        if (!pPlayer)
         {
             return;
         }
-        if (isWin == true)
+        if (isWin)
         {
             pPlayer->addWins();
             pPlayer->addScore(scoreDelta);
@@ -279,6 +284,7 @@ void PlayerManager::updatePlayerBattleResult(uint64_t playerId, uint32_t scoreDe
         {
             pPlayer->subScore(scoreDelta);
         }
+        pPlayer->setStatus(common::PlayerStatus::lobby);
     }
     enqueuePlayerSave(playerId);
 }
@@ -305,7 +311,7 @@ void PlayerManager::saveDirtyPlayers()
     for (auto& id : setSaveIds)
     {
 		Player* pPlayer = _getPlayerNoLock(id);
-        if (pPlayer == nullptr)
+        if (!pPlayer)
         {
             continue;
         }

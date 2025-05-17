@@ -1,6 +1,7 @@
 // player.h
 #ifndef PLAYER_H
 #define PLAYER_H
+#include "../../include/globalDefine.h"
 #include <cstdint>
 
 class Player
@@ -14,17 +15,20 @@ public:
     uint32_t getWins() const { return m_wins; };
 	uint32_t getTier() const;
     uint64_t getUpdatedTime() const { return m_updatedTime; };
+    common::PlayerStatus getStatus() const { return m_status; }
+    bool isInLobby() const { return (m_status == common::PlayerStatus::lobby); }
 
     void addScore(uint32_t scoreDelta);
     void subScore(uint32_t scoreDelta);
     void addWins();
-
+    void setStatus(common::PlayerStatus status);
 
 private:
     uint64_t m_id = 0;
     uint32_t m_score = 0;
     uint32_t m_wins = 0;
     uint64_t m_updatedTime = 0;
+    common::PlayerStatus m_status = common::PlayerStatus::offline;
 };
 
 #endif // !PLAYER_H

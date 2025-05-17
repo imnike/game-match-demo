@@ -2,6 +2,7 @@
 #ifndef BATTLE_MANAGER_H
 #define BATTLE_MANAGER_H
 #include "objects/player.h"
+#include "objects/hero.h"
 #include <vector>
 #include <map>
 #include <mutex>
@@ -19,8 +20,8 @@ public:
     void finishBattle();
 
 private:
-    std::vector<std::unique_ptr<Player>> m_vecTeamRed;
-    std::vector<std::unique_ptr<Player>> m_vecTeamBlue;
+    std::vector<std::unique_ptr<Hero>> m_vecTeamRed;
+    std::vector<std::unique_ptr<Hero>> m_vecTeamBlue;
 };
 
 // --- TeamMatchQueue 類別 (保持不變，因為它處理的是單個玩家) ---
@@ -34,6 +35,7 @@ public:
     void addMember(Player* pPlayer);
     bool hasEnoughMemberForTeam(uint32_t tier);
     std::vector<Player*> getPlayersForTeam(uint32_t tier);
+    std::map<uint32_t, std::vector<Player*>>* getTierQueue() { return &mapTierQueues; };
 
     std::mutex mutex;
     std::map<uint32_t, std::vector<Player*>> mapTierQueues;
@@ -50,6 +52,7 @@ public:
     void addTeam(std::vector<Player*> team);
     bool hasEnoughTeamsForBattle(uint32_t tier);
     std::vector<std::vector<Player*>> getTeamsForBattle(uint32_t tier);
+    std::map<uint32_t, std::vector<std::vector<Player*>>>* getTierQueue() { return &mapTierQueues; };
 
     std::mutex mutex;
     std::map<uint32_t, std::vector<std::vector<Player*>>> mapTierQueues;
@@ -69,8 +72,11 @@ public:
 
     void addPlayerToQueue(Player* pPlayer);
 
-    void PlayerWin(Player* pPlayer);
-    void PlayerLose(Player* pPlayer);
+    void PlayerWin(uint64_t playerId);
+    void PlayerLose(uint64_t playerId);
+
+    const TeamMatchQueue* getTeamMatchQueue() const { return &teamMatchQueue; }
+    const BattleMatchQueue* getBattleMatchQueue() const { return &battleMatchQueue; }
 
 private:
     BattleManager();

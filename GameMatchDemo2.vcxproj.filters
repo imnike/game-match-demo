@@ -51,6 +51,9 @@
     <ClInclude Include="src\scheduleManager.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\objects\hero.h">
+      <Filter>src\objects</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="sqlite\sqlite3.c">
@@ -76,6 +79,9 @@
     </ClCompile>
     <ClCompile Include="src\scheduleManager.cpp">
       <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\objects\hero.cpp">
+      <Filter>src\objects</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

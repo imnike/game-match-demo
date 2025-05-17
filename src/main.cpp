@@ -76,8 +76,6 @@ int main()
 
     std::cout << "--- Game Match Demo Shutting Down ---\n";
 
-    // *** 注意!所有管理器的 release() 呼叫都在 exitGame() 函式中統一處理 ***
-
     return 0;
 }
 
@@ -90,8 +88,6 @@ void simulatePlayers(uint32_t counts)
 
     // 獲取所有玩家ob
     auto pMapAllPlayers = PlayerManager::instance().getAllPlayers();
-    // 獲取在線玩家id
-    std::set<uint64_t>* pSetOnlinePlayerIds = PlayerManager::instance().getOnlinePlayerIds();
 
     // 實作隨機取得一個不在線的玩家id
     uint64_t maxId = static_cast<uint64_t>(pMapAllPlayers->size());
@@ -99,29 +95,32 @@ void simulatePlayers(uint32_t counts)
     {
         // 取得一個隨機(1~maxID)
         uint64_t playerId = random_utils::getRandom(maxId);
-        auto itRes = pSetOnlinePlayerIds->find(playerId);
-        if (itRes != pSetOnlinePlayerIds->end())
+        Player* pPlayer = nullptr;
+        pPlayer = PlayerManager::instance().playerLogin(playerId);
+        if (pPlayer)
         {
-            playerId = 0;
-        }
-
-        Player* pPlayer = PlayerManager::instance().playerLogin(playerId);
-        if (pPlayer != nullptr)
-        {
-            playerId = pPlayer->getId(); // 假設 playerLogin 會返回有效的玩家 ID
-            vecLoggedInIds.push_back(playerId);
-            // 將玩家加入匹配隊列
-            BattleManager::instance().addPlayerToQueue(pPlayer);
+            if (pPlayer->isInLobby())
+            {
+                playerId = pPlayer->getId(); // 假設 playerLogin 會返回有效的玩家 ID
+                vecLoggedInIds.push_back(playerId);
+                // 將玩家加入匹配隊列
+                BattleManager::instance().addPlayerToQueue(pPlayer);
+                std::cout << " player " << playerId << " join matchQueue.\n";
+            }
+            else
+            {
+                std::cout << " player " << playerId << " is not in lobby.\n";
+            }
         }
         else
         {
-            std::cerr << "Error: Failed to login player " << playerId << "\n";
+            std::cerr << "Error: Failed to get player " << playerId << "\n";
         }
     }
 
-    std::cout << "Waiting 5 seconds for players to potentially match...\n";
+    std::cout << "Waiting 3 seconds for players to potentially match...\n";
     // 等待一段時間，讓玩家有機會匹配和戰鬥
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    std::this_thread::sleep_for(std::chrono::seconds(3));
 
     // // 如果需要，可以使這些玩家登出
     // for (uint64_t id : vecLoggedInIds)
@@ -174,6 +173,78 @@ void commandThread()
         if (command_name == "list")
         {
             listAllPlayers();
+        }
+        else if (command_name == "queue")
+        {
+            auto pTeamTierQueues = BattleManager::instance().getTeamMatchQueue();
+            std::cout << "\n--- Team Match Queue 內容 ---" << std::endl;
+            // 獲取 TeamMatchQueue 的內部 map 指針
+            if (pTeamTierQueues)
+            {
+                const auto* pMapQueue = &pTeamTierQueues->mapTierQueues;
+                if (pMapQueue->empty())
+                {
+                    std::cout << "  (Team Match Queue 目前沒有玩家)\n";
+                }
+                else 
+                {
+                    for (const auto& pair : *pMapQueue)
+                    {
+                        uint32_t tier = pair.first;
+                        const std::vector<Player*>& playersInTier = pair.second;
+                        std::cout << "  Tier " << tier << " (玩家數: " << playersInTier.size() << "): ";
+                        for (const auto& pPlayer : playersInTier) 
+                        {
+                            if (pPlayer)
+                            {
+                                std::cout << pPlayer->getId() << " ";
+                            }
+                        }
+                        std::cout << std::endl;
+                    }
+                }
+            }
+            else {
+                std::cout << "  無法獲取 Team Match Queue 內容。\n";
+            }
+
+            std::cout << "\n--- Battle Match Queue 內容 ---" << std::endl;
+            // 獲取 BattleMatchQueue 的內部 map 指針
+            auto pBattleTierQueues = BattleManager::instance().getBattleMatchQueue();
+            if (pBattleTierQueues)
+            {
+                const auto* pMapQueue = &pBattleTierQueues->mapTierQueues;
+                if (pMapQueue->empty())
+                {
+                    std::cout << "  (Battle Match Queue 目前沒有隊伍)\n";
+                }
+                else 
+                {
+                    for (const auto& pair : *pMapQueue) 
+                    {
+                        uint32_t tier = pair.first;
+                        const std::vector<std::vector<Player*>>& teamsInTier = pair.second;
+                        std::cout << "  Tier " << tier << " (隊伍數: " << teamsInTier.size() << "): ";
+                        for (const auto& team : teamsInTier) 
+                        {
+                            std::cout << "[";
+                            for (const auto& pPlayer : team) 
+                            {
+                                if (pPlayer) 
+                                {
+                                    std::cout << pPlayer->getId() << " ";
+                                }
+                            }
+                            std::cout << "] ";
+                        }
+                        std::cout << std::endl;
+                    }
+                }
+            }
+            else 
+            {
+                std::cout << "  無法獲取 Battle Match Queue 內容。\n";
+            }
         }
         else if (command_name == "query")
         {
@@ -250,49 +321,29 @@ void commandThread()
 
     std::cout << "Command thread ended.\n";
 }
-//
-//void commandThread()
-//{
-//    std::cout << "Command thread started. Available commands: <list>, <start>, <exit>\n";
-//
-//    std::string command; // 直接讀取命令字串
-//    while (isRunning)
-//    {
-//        // 確保在每次等待使用者輸入前，清除可能的緩衝區殘留
-//        // 這是處理 `std::cin` 怪異行為的關鍵步驟，即使在簡單模式下也建議保留。
-//        //std::cin.clear();
-//        //std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-//
-//        std::cout << "> "; // 提示用戶輸入
-//        std::getline(std::cin, command); // 阻塞式讀取一行輸入
-//
-//        // 將命令名稱轉換為小寫，以便不區分大小寫
-//        //std::transform(command.begin(), command.end(), command.begin(), ::tolower);
-//
-//        if (command == "list")
-//        {
-//            listAllPlayers();
-//        }
-//        else if (command == "start") // 模擬玩家活動的命令
-//        {
-//            simulatePlayers(10); // 總是模擬一次單個玩家
-//        }
-//        else if (command == "exit" || command == "quit") // 退出命令
-//        {
-//            exitGame(); // 呼叫 exitGame 會設定 isRunning = false
-//        }
-//        else if (command.empty()) // 處理空行 (只有 Enter)
-//        {
-//            // 什麼都不做，只是等待下一次輸入
-//        }
-//        else // 未知命令
-//        {
-//            std::cout << "Unknown command '" << command << "'. Available commands: <list>, <start>, <exit>\n";
-//        }
-//    }
-//
-//    std::cout << "Command thread ended.\n";
-//}
+
+static const std::string getStatusToString(common::PlayerStatus status)
+ {
+    switch (status) 
+    {
+    case common::PlayerStatus::offline:
+        return "";
+        break;
+    case common::PlayerStatus::lobby:
+        return "Lobby";
+        break;
+    case common::PlayerStatus::queue:
+        return "Matching";
+        break;
+    case common::PlayerStatus::battle:
+        return "Fighting";
+        break;
+    default:
+        break;
+    }
+    return "unknown";
+}
+
 // 列出所有玩家資訊
 void listAllPlayers()
 {
@@ -306,28 +357,27 @@ void listAllPlayers()
     std::cout << "\n----- PLAYERS LIST -----\n";
     std::cout << std::left << std::setw(10) << "ID"
         << std::setw(10) << "Score"
-        << std::setw(10) << "Level" // 假設 Player::getTier() 對應 Level
+        << std::setw(10) << "Tier"
         << std::setw(10) << "Wins"
-        << std::setw(25) << "Updated Time" << "\n"; // 新增 Updated Time 欄位
-    std::cout << "--------------------------------------------------------\n"; // 調整分隔線長度
+        << std::setw(15) << "Status" 
+        << std::setw(25) << "Updated Time" << "\n"; 
+    std::cout << "------------------------------------------------------------------------------\n";
 
     for (const auto& itPlayer : *pMapPlayers)
     {
         Player* pPlayer = itPlayer.second.get();
-        if (pPlayer == nullptr)
+        if (pPlayer)
         {
-            continue;
+            std::cout << std::left << std::setw(10) << pPlayer->getId()
+                << std::setw(10) << pPlayer->getScore()
+                << std::setw(10) << pPlayer->getTier()
+                << std::setw(10) << pPlayer->getWins()
+                << std::setw(15) << getStatusToString(pPlayer->getStatus())
+                << std::setw(25) << time_utils::formatTimestampMs(pPlayer->getUpdatedTime()) << "\n";
         }
-        std::cout << std::left << std::setw(10) << pPlayer->getId()
-            << std::setw(10) << pPlayer->getScore()
-            << std::setw(10) << pPlayer->getTier()
-            << std::setw(10) << pPlayer->getWins();
-
-        // 呼叫 Player 的 getUpdatedTimestamp() 並格式化
-        std::cout << std::setw(25) << time_utils::formatTimestampMs(pPlayer->getUpdatedTime()) << "\n";
     }
 
-    std::cout << "--------------------------------------------------------\n"; // 調整分隔線長度
+    std::cout << "------------------------------------------------------------------------------\n";
 }
 
 // 退出遊戲，執行清理操作
