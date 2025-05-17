@@ -1,9 +1,4 @@
-// 檔案名稱: ScheduleManager.cpp
-// 建立日期: 2024-05-16
-// 作者: Gemini AI
-// 描述: ScheduleManager 類別的實作。負責管理和執行定時任務。
-//      核心邏輯在獨立執行緒中運行，確保主應用程式的響應性。
-
+// scheduleManager.cpp
 #include "ScheduleManager.h"
 #include "PlayerManager.h" // 假設 PlayerManager 已經存在並包含 saveDirtyPlayers()
 
@@ -75,16 +70,11 @@ void ScheduleManager::scheduleTask(std::function<void()> callback, int intervalS
 
 // 私有構造函式實作
 ScheduleManager::ScheduleManager()
-    : m_running(false) // 初始化 m_running
 {
-    // 構造時通常不做太多事，主要初始化在 initialize() 中
 }
 
-// 私有解構函式實作
 ScheduleManager::~ScheduleManager()
 {
-    // 解構時清理資源
-    release();
 }
 
 // 執行緒會執行的核心迴圈函式

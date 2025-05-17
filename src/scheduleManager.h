@@ -1,10 +1,4 @@
-// 檔案名稱: ScheduleManager.h
-// 建立日期: 2024-05-16
-// 作者: Gemini AI
-// 描述: 定義 ScheduleManager 類別，用於管理遊戲伺服器中的定時任務。
-//      任務在獨立執行緒中運行，確保主邏輯的響應性。
-//      任務間隔現在只支援整數秒。
-
+// scheduleManager.h
 #ifndef SCHEDULE_MANAGER_H
 #define SCHEDULE_MANAGER_H
 
@@ -55,15 +49,13 @@ public:
     void scheduleTask(std::function<void()> callback, int intervalSeconds, bool isRepeating = true);
 
 private:
-    // 私有構造函式，確保單例模式
     ScheduleManager();
-
-    // 私有解構函式
     ~ScheduleManager();
 
-    // 禁用拷貝構造函式和拷貝賦值運算子，確保單例的唯一性
     ScheduleManager(const ScheduleManager&) = delete;
     ScheduleManager& operator=(const ScheduleManager&) = delete;
+    ScheduleManager(ScheduleManager&&) = delete;
+    ScheduleManager& operator=(ScheduleManager&&) = delete;
 
     std::vector<ScheduledTask> m_tasks;                 // 儲存所有排程任務的列表
     std::mutex m_mutex;                                 // 保護 m_tasks 向量的互斥鎖
