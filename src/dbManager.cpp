@@ -42,19 +42,26 @@ bool DbManager::initialize()
         sqlite3_close(m_dbHandler);
         m_dbHandler = nullptr;
     }
+    return true;
+}
 
+bool DbManager::connect()
+{
     int rc = sqlite3_open(m_dbName.c_str(), &m_dbHandler);
     if (rc != SQLITE_OK)
     {
-        std::cerr << "DbManager::initialize: Cannot open database: " << sqlite3_errmsg(m_dbHandler) << std::endl;
+		std::cerr << "DbManager::connect: Can't open database: " << sqlite3_errmsg(m_dbHandler) << std::endl;
         m_dbHandler = nullptr;
-        return false;
+		return false;
     }
+	std::cout << "DbManager::connect database opened successfully." << std::endl;
     return true;
 }
 
 void DbManager::release()
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     if (m_dbHandler)
     {
         sqlite3_close(m_dbHandler);
@@ -63,7 +70,7 @@ void DbManager::release()
 	m_mapFuncSyncData.clear();
 }
 
-void DbManager::ensureTableSchema()
+bool DbManager::ensureTableSchema()
 {
     for (auto& itTable : MAP_CREATE_TABLE_SQL)
     {
@@ -76,10 +83,11 @@ void DbManager::ensureTableSchema()
             {
 				// table creation failed
                 std::cerr << "DbManager::initialize: Failed to create table '" << tableName << "'." << std::endl;
-                return;
+                return false;
             }
         }
     }
+    return true;
 }
 
 void DbManager::loadTableData()
@@ -95,6 +103,14 @@ void DbManager::loadTableData()
 // 初始化時取出所有玩家資料同步至playerManage
 void DbManager::syncAllPlayerBattles()
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (!m_dbHandler)
+    {
+        std::cerr << "DbManager::tableExists: Database not open." << std::endl;
+        return;
+    }
+
     const char* sql = "SELECT id, score, wins, updated_time FROM player_battles;";
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(m_dbHandler, sql, -1, &stmt, nullptr);
@@ -124,6 +140,8 @@ void DbManager::syncAllPlayerBattles()
 
 bool DbManager::isTableExists(const std::string tableName)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     if (!m_dbHandler) 
     {
         std::cerr << "DbManager::tableExists: Database not open." << std::endl;
@@ -156,6 +174,12 @@ bool DbManager::isTableExists(const std::string tableName)
 
 bool DbManager::createTable(const std::string tableName)
 {
+    if (!m_dbHandler)
+    {
+        std::cerr << "DbManager::tableExists: Database not open." << std::endl;
+        return false;
+    }
+
     auto itSql = MAP_CREATE_TABLE_SQL.find(tableName);
     if (itSql == MAP_CREATE_TABLE_SQL.end())
     {
@@ -177,6 +201,14 @@ bool DbManager::createTable(const std::string tableName)
 
 uint64_t DbManager::insertPlayerBattles()
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (!m_dbHandler)
+    {
+        std::cerr << "DbManager::tableExists: Database not open." << std::endl;
+        return false;
+    }
+
     // SQL 語句不指定 id，讓 SQLite 自動生成 (因為 id 是 INTEGER PRIMARY KEY AUTOINCREMENT)
     const char* sql =
         "INSERT INTO player_battles (score, wins, updated_time) "
@@ -218,6 +250,14 @@ uint64_t DbManager::insertPlayerBattles()
 }
 bool DbManager::updatePlayerBattles(uint64_t id, uint32_t score, uint32_t wins)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (!m_dbHandler)
+    {
+        std::cerr << "DbManager::tableExists: Database not open." << std::endl;
+        return false;
+    }
+
     // SQL 語句：注意 ? 的順序必須與綁定順序一致
     const char* sql = "UPDATE player_battles SET score = ?, wins = ?, updated_time = ? WHERE id = ?;";
 
@@ -250,6 +290,14 @@ bool DbManager::updatePlayerBattles(uint64_t id, uint32_t score, uint32_t wins)
 }
 bool DbManager::queryPlayerBattles(uint64_t id, uint32_t& score, uint32_t& wins, uint64_t& updateTime)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (!m_dbHandler)
+    {
+        std::cerr << "DbManager::tableExists: Database not open." << std::endl;
+        return false;
+    }
+
     const char* sql = "SELECT score, wins, updated_time FROM player_battles WHERE id = ?;";
 
     sqlite3_stmt* stmt;

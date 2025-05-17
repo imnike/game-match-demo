@@ -57,14 +57,25 @@ int main()
         return 1;
     }
 
-    // 確保資料庫結構和加載資料
-    DbManager::instance().ensureTableSchema();
+	// connect to database
+    if (DbManager::instance().connect() == false)
+    {
+        std::cerr << "Error: Failed to connect to database!\n";
+		return 1;
+    }
+	// make sure the database schema is correct
+    if (DbManager::instance().ensureTableSchema() == false)
+    {
+        std::cerr << "Error: Failed to ensure database schema!\n";
+		return 1;
+    }
+	
     DbManager::instance().loadTableData();
 
 	BattleManager::instance().startMatchmaking(); // 啟動匹配執行緒
 
     std::cout << "Game Server initialized. Main thread ready for commands.\n";
-    std::cout << "Type 'quit' or 'exit' to shut down the server.\n";
+    std::cout << "Type 'exit' to shut down the demo.\n";
 
     std::thread cmdThread(commandThread);   // 啟動主控台命令處理執行緒
 
@@ -102,7 +113,7 @@ void simulatePlayers(uint32_t counts)
             if (pPlayer->isInLobby())
             {
                 playerId = pPlayer->getId(); // 假設 playerLogin 會返回有效的玩家 ID
-                vecLoggedInIds.push_back(playerId);
+                vecLoggedInIds.emplace_back(playerId);
                 // 將玩家加入匹配隊列
                 BattleManager::instance().addPlayerToQueue(pPlayer);
                 std::cout << " player " << playerId << " join matchQueue.\n";
@@ -140,7 +151,7 @@ void simulatePlayers(uint32_t counts)
 // 命令處理執行緒的函式
 void commandThread()
 {
-    std::cout << "Command thread started. Available commands: <list [ID|all]>, <query ID>, <start [count]>, <exit>\n";
+    std::cout << "Command thread started. Available commands: <help>, <list>, <query ID>, <start [count]>, <exit>\n";
 
     std::string line_input; // 用於讀取整行輸入
     while (isRunning)
@@ -170,29 +181,40 @@ void commandThread()
 
         std::transform(command_name.begin(), command_name.end(), command_name.begin(), ::tolower);
 
-        if (command_name == "list")
+        if (command_name == "help")
+        {
+            std::cout << "--- Available Commands ---\n";
+            std::cout << "  <help>           : Display this help message.\n";
+            std::cout << "  <list>           : List all players with their current status, score, tier, wins, and last update time.\n";
+            std::cout << "  <queue>          : Display the current status of the team matchmaking queue and battle matchmaking queue.\n";
+            std::cout << "  <query ID>       : Query battle statistics for a specific player by their ID.\n";
+            std::cout << "  <start [count]>  : Simulate player logins and add them to the matchmaking queue. 'count' is optional (default: 1).\n";
+            std::cout << "  <exit>           : Shut down the game demo.\n";
+            std::cout << "--------------------------\n";
+        }
+        else if (command_name == "list")
         {
             listAllPlayers();
         }
         else if (command_name == "queue")
         {
             auto pTeamTierQueues = BattleManager::instance().getTeamMatchQueue();
-            std::cout << "\n--- Team Match Queue 內容 ---" << std::endl;
+            std::cout << "\n--- Team Match Queue  ---" << std::endl;
             // 獲取 TeamMatchQueue 的內部 map 指針
             if (pTeamTierQueues)
             {
-                const auto* pMapQueue = &pTeamTierQueues->mapTierQueues;
-                if (pMapQueue->empty())
+				const auto tmpMapQueue = pTeamTierQueues->getTierQueue();
+                if (tmpMapQueue.empty())
                 {
-                    std::cout << "  (Team Match Queue 目前沒有玩家)\n";
+                    std::cout << "  (Team Match Queue no players)\n";
                 }
                 else 
                 {
-                    for (const auto& pair : *pMapQueue)
+                    for (const auto& pair : tmpMapQueue)
                     {
                         uint32_t tier = pair.first;
                         const std::vector<Player*>& playersInTier = pair.second;
-                        std::cout << "  Tier " << tier << " (玩家數: " << playersInTier.size() << "): ";
+                        std::cout << "  Tier " << tier << " (players: " << playersInTier.size() << "): ";
                         for (const auto& pPlayer : playersInTier) 
                         {
                             if (pPlayer)
@@ -204,27 +226,28 @@ void commandThread()
                     }
                 }
             }
-            else {
-                std::cout << "  無法獲取 Team Match Queue 內容。\n";
+            else 
+            {
+                std::cout << "  (Team Match Queue no players)\n";
             }
 
-            std::cout << "\n--- Battle Match Queue 內容 ---" << std::endl;
+            std::cout << "\n--- Battle Match Queue  ---" << std::endl;
             // 獲取 BattleMatchQueue 的內部 map 指針
             auto pBattleTierQueues = BattleManager::instance().getBattleMatchQueue();
             if (pBattleTierQueues)
             {
-                const auto* pMapQueue = &pBattleTierQueues->mapTierQueues;
-                if (pMapQueue->empty())
+                const auto tmpMapQueue = pBattleTierQueues->getTierQueue();
+                if (tmpMapQueue.empty())
                 {
-                    std::cout << "  (Battle Match Queue 目前沒有隊伍)\n";
+                    std::cout << "  (Battle Match Queue no teams)\n";
                 }
                 else 
                 {
-                    for (const auto& pair : *pMapQueue) 
+                    for (const auto& pair : tmpMapQueue) 
                     {
                         uint32_t tier = pair.first;
                         const std::vector<std::vector<Player*>>& teamsInTier = pair.second;
-                        std::cout << "  Tier " << tier << " (隊伍數: " << teamsInTier.size() << "): ";
+                        std::cout << "  Tier " << tier << " (teams: " << teamsInTier.size() << "): ";
                         for (const auto& team : teamsInTier) 
                         {
                             std::cout << "[";
@@ -243,7 +266,7 @@ void commandThread()
             }
             else 
             {
-                std::cout << "  無法獲取 Battle Match Queue 內容。\n";
+                std::cout << "  (Battle Match Queue no teams)\n";
             }
         }
         else if (command_name == "query")
@@ -309,7 +332,7 @@ void commandThread()
             }
             simulatePlayers(count);
         }
-        else if (command_name == "exit" || command_name == "quit")
+        else if (command_name == "exit")
         {
             exitGame();
         }

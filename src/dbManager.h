@@ -7,6 +7,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <mutex>
 
 struct sqlite3;
 
@@ -16,9 +17,10 @@ public:
     static DbManager& instance();
 
     bool initialize();
+    bool connect();
     void release();
     void loadTableData();
-    void ensureTableSchema();
+    bool ensureTableSchema();
     bool isTableExists(const std::string tableName);
     bool createTable(const std::string tableName);
 
@@ -40,6 +42,8 @@ private:
     sqlite3* m_dbHandler = nullptr;
     std::string m_dbName = "";
     std::unordered_map<std::string, std::function<void()>> m_mapFuncSyncData{};
+
+    std::mutex m_mutex;
 };
 
 #endif // DB_MANAGER_H
