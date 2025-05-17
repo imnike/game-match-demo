@@ -118,9 +118,9 @@ void simulatePlayers(uint32_t counts)
         }
     }
 
-    std::cout << "Waiting 3 seconds for players to potentially match...\n";
+    //std::cout << "Waiting 3 seconds for players to potentially match...\n";
     // 等待一段時間，讓玩家有機會匹配和戰鬥
-    std::this_thread::sleep_for(std::chrono::seconds(3));
+    //std::this_thread::sleep_for(std::chrono::seconds(3));
 
     // // 如果需要，可以使這些玩家登出
     // for (uint64_t id : vecLoggedInIds)
