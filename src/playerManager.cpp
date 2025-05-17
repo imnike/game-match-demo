@@ -30,22 +30,22 @@ PlayerManager::~PlayerManager()
 
 bool PlayerManager::initialize()
 {
-    mapPlayers.clear();
-    setOnlinePlayerIds.clear();
+    m_mapPlayers.clear();
+    m_setOnlinePlayerIds.clear();
     return true;
 }
 
 void PlayerManager::release()
 {
-    std::lock_guard<std::mutex> lock(mapPlayersMutex);
+    std::lock_guard<std::mutex> lock(m_mapPlayersMutex);
 
-    mapPlayers.clear();
-    setOnlinePlayerIds.clear();
+    m_mapPlayers.clear();
+    m_setOnlinePlayerIds.clear();
 }
 
 Player* PlayerManager::playerLogin(uint64_t id)
 {
-    std::lock_guard<std::mutex> lock(mapPlayersMutex);
+    std::lock_guard<std::mutex> lock(m_mapPlayersMutex);
 
     if (id == 0)
     {
@@ -73,7 +73,7 @@ Player* PlayerManager::playerLogin(uint64_t id)
 
 bool PlayerManager::playerLogout(uint64_t id)
 {
-    std::lock_guard<std::mutex> lock(mapPlayersMutex);
+    std::lock_guard<std::mutex> lock(m_mapPlayersMutex);
 
     Player* pPlayer = _getPlayerNoLock(id);
     if (!pPlayer)
@@ -90,17 +90,17 @@ bool PlayerManager::playerLogout(uint64_t id)
 
 bool PlayerManager::isPlayerOnline(uint64_t id)
 {
-    std::lock_guard<std::mutex> lock(mapPlayersMutex);
+    std::lock_guard<std::mutex> lock(m_mapPlayersMutex);
 
-    return (setOnlinePlayerIds.find(id) != setOnlinePlayerIds.end());
+    return (m_setOnlinePlayerIds.find(id) != m_setOnlinePlayerIds.end());
 }
 
 std::vector<Player*> PlayerManager::getOnlinePlayers() 
 {
-    std::lock_guard<std::mutex> lock(mapPlayersMutex);
+    std::lock_guard<std::mutex> lock(m_mapPlayersMutex);
 
     std::vector<Player*> tmpVecPlayers;
-    for (auto& id : setOnlinePlayerIds) 
+    for (auto& id : m_setOnlinePlayerIds) 
     {
         Player* pPlayer = _getPlayerNoLock(id);
         if (!pPlayer)
@@ -120,12 +120,12 @@ void PlayerManager::syncPlayerFromDbNoLock(uint64_t id, uint32_t score, uint32_t
 
 Player* PlayerManager::_getPlayerNoLock(uint64_t id)
 {
-    if (mapPlayers.empty())
+    if (m_mapPlayers.empty())
     {
         return nullptr;
     }
-    auto it = mapPlayers.find(id);
-    if (it != mapPlayers.end())
+    auto it = m_mapPlayers.find(id);
+    if (it != m_mapPlayers.end())
     {
         return it->second.get();
     }
@@ -136,23 +136,23 @@ void PlayerManager::_setPlayerOnlineNoLock(uint64_t id, bool isOnline)
 {
     if (isOnline)
     {
-        setOnlinePlayerIds.emplace(id);
+        m_setOnlinePlayerIds.emplace(id);
     }
     else
     {
-        setOnlinePlayerIds.erase(id);
+        m_setOnlinePlayerIds.erase(id);
     }
 }
 
 void PlayerManager::_syncPlayerNoLock(uint64_t id, uint32_t score, uint32_t wins, uint64_t updatedTime)
 {
-    if (mapPlayers.find(id) != mapPlayers.end())
+    if (m_mapPlayers.find(id) != m_mapPlayers.end())
     {
         std::cerr << "Player " << id << " already exists." << std::endl;
         return;
     }
     std::unique_ptr<Player> uPlayer = std::make_unique<Player>(id, score, wins, updatedTime);
-    mapPlayers[id] = std::move(uPlayer);
+    m_mapPlayers[id] = std::move(uPlayer);
 }
 
 // --- 排行榜相關方法實作 ---
@@ -206,9 +206,9 @@ void PlayerManager::calculateAndCacheLeaderboard()
     // 鎖定 mapPlayersMutex 以安全地讀取所有玩家數據
     // 這確保了在讀取 mapPlayers 時，沒有其他執行緒在修改它
     {
-        std::lock_guard<std::mutex> lock(mapPlayersMutex);
-        currentRanks.reserve(mapPlayers.size()); // 預留空間以提高效能
-        for (const auto& pair : mapPlayers) 
+        std::lock_guard<std::mutex> lock(m_mapPlayersMutex);
+        currentRanks.reserve(m_mapPlayers.size()); // 預留空間以提高效能
+        for (const auto& pair : m_mapPlayers) 
         {
             Player* pPlayer = pair.second.get();
             if (pPlayer) 
@@ -268,7 +268,7 @@ std::vector<PlayerRankInfo> PlayerManager::getLeaderboard(size_t topN)
 void PlayerManager::handlePlayerBattleResult(uint64_t playerId, uint32_t scoreDelta, bool isWin)
 {
     {
-        std::lock_guard<std::mutex> lock(mapPlayersMutex); // 保護對 m_mapPlayers 的訪問
+        std::lock_guard<std::mutex> lock(m_mapPlayersMutex); // 保護對 m_mapPlayers 的訪問
 
         Player* pPlayer = _getPlayerNoLock(playerId);
         if (!pPlayer)
@@ -291,21 +291,21 @@ void PlayerManager::handlePlayerBattleResult(uint64_t playerId, uint32_t scoreDe
 
 void PlayerManager::enqueuePlayerSave(uint64_t playerId)
 {
-	std::lock_guard<std::mutex> lock(setdirtyPlayerIdsMutex);
-	setDirtyPlayerIds.emplace(playerId);
+	std::lock_guard<std::mutex> lock(m_setdirtyPlayerIdsMutex);
+	m_setDirtyPlayerIds.emplace(playerId);
 }
 
 void PlayerManager::saveDirtyPlayers()
 {
-    if (setDirtyPlayerIds.empty())
+    if (m_setDirtyPlayerIds.empty())
     {
         return;
     }
     std::set<uint64_t> setSaveIds;
     {
         // 僅鎖定 m_dirtyPlayerIdsMutex，並迅速交換數據
-        std::lock_guard<std::mutex> lock(setdirtyPlayerIdsMutex);
-        setSaveIds.swap(setDirtyPlayerIds); // 將 m_dirtyPlayerIds 的內容移動到 setSaveIds
+        std::lock_guard<std::mutex> lock(m_setdirtyPlayerIdsMutex);
+        setSaveIds.swap(m_setDirtyPlayerIds); // 將 m_dirtyPlayerIds 的內容移動到 setSaveIds
         // 這樣，m_dirtyPlayerIds 就可以立即接受新的 ID 了
     }
     for (auto& id : setSaveIds)

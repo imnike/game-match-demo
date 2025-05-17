@@ -38,8 +38,8 @@ public:
     bool playerLogout(uint64_t id);
     bool isPlayerOnline(uint64_t id);
     std::vector<Player*> getOnlinePlayers();
-	std::unordered_map<uint64_t, std::unique_ptr<Player>>* getAllPlayers() { return &mapPlayers; }
-    std::set<uint64_t>* getOnlinePlayerIds() { return &setOnlinePlayerIds; }
+	std::unordered_map<uint64_t, std::unique_ptr<Player>>* getAllPlayers() { return &m_mapPlayers; }
+    std::set<uint64_t>* getOnlinePlayerIds() { return &m_setOnlinePlayerIds; }
     void syncPlayerFromDbNoLock(uint64_t id, uint32_t score, uint32_t wins, uint64_t updatedTime);
 
     void handlePlayerBattleResult(uint64_t playerId, uint32_t scoreDelta, bool isWin);
@@ -76,12 +76,12 @@ private:
     // 內部方法，用於實際計算排行榜並更新緩存
     void calculateAndCacheLeaderboard();
 
-    std::unordered_map<uint64_t, std::unique_ptr<Player>> mapPlayers{};
-	std::set<uint64_t> setOnlinePlayerIds{};
-	std::mutex mapPlayersMutex;
+    std::unordered_map<uint64_t, std::unique_ptr<Player>> m_mapPlayers{};
+	std::set<uint64_t> m_setOnlinePlayerIds{};
+	std::mutex m_mapPlayersMutex;
 
-    std::set<uint64_t> setDirtyPlayerIds{};
-    std::mutex setdirtyPlayerIdsMutex;
+    std::set<uint64_t> m_setDirtyPlayerIds{};
+    std::mutex m_setdirtyPlayerIdsMutex;
 
     // --- 排行榜專用成員 ---
     std::vector<PlayerRankInfo> m_vecCachedLeaderboard; // 儲存預計算且排序好的排行榜數據
