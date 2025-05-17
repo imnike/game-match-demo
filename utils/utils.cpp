@@ -1,4 +1,7 @@
-// utils.cpp
+// @file  : utils.cpp
+// @brief : ¤u¨ã¨ç¦¡
+// @author: August
+// @date  : 2025-05-15
 #include "utils.h"
 #include <chrono>    // for std::chrono::system_clock, milliseconds, time_point
 #include <sstream>
