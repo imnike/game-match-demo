@@ -260,11 +260,33 @@ std::vector<PlayerRankInfo> PlayerManager::getLeaderboard(size_t topN)
     return result;
 }
 
-void PlayerManager::savePlayer(uint64_t playerId)
+void PlayerManager::updatePlayerBattleResult(uint64_t playerId, uint32_t scoreDelta, bool isWin)
 {
-	std::lock_guard<std::mutex> lock(mapPlayersMutex);
+    {
+        std::lock_guard<std::mutex> lock(mapPlayersMutex); // 保護對 m_mapPlayers 的訪問
+
+        Player* pPlayer = _getPlayerNoLock(playerId);
+        if (pPlayer == nullptr)
+        {
+            return;
+        }
+        if (isWin == true)
+        {
+            pPlayer->addWins();
+            pPlayer->addScore(scoreDelta);
+        }
+        else
+        {
+            pPlayer->subScore(scoreDelta);
+        }
+    }
+    enqueuePlayerSave(playerId);
+}
+
+void PlayerManager::enqueuePlayerSave(uint64_t playerId)
+{
+	std::lock_guard<std::mutex> lock(setdirtyPlayerIdsMutex);
 	setDirtyPlayerIds.emplace(playerId);
-    //DbManager::instance().updatePlayerBattles(m_id, m_score, m_wins);
 }
 
 void PlayerManager::saveDirtyPlayers()
@@ -273,7 +295,6 @@ void PlayerManager::saveDirtyPlayers()
     {
         return;
     }
-    std::lock_guard<std::mutex> lock(mapPlayersMutex);
     std::set<uint64_t> setSaveIds;
     {
         // 僅鎖定 m_dirtyPlayerIdsMutex，並迅速交換數據

@@ -8,22 +8,19 @@
 #include <thread>
 #include <atomic>
 
-// 前向聲明 PlayerManager (如果沒有在 player.h 中包含)
-class PlayerManager;
-class Player;
-
 // --- BattleRoom 類別 (戰鬥房間) ---
 class BattleRoom
 {
 public:
     // 將黑隊白隊改為紅隊藍隊
-    BattleRoom(std::vector<Player*> vecTeamRed, std::vector<Player*> vecTeamBlue);
+    BattleRoom(const std::vector<Player*>& refVecTeamRed, const std::vector<Player*>& refVecTeamBlue);
     ~BattleRoom();
     void startBattle();
+    void finishBattle();
 
 private:
-    std::vector<Player*> vecTeamRed;
-    std::vector<Player*> vecTeamBlue;
+    std::vector<std::unique_ptr<Player>> m_vecTeamRed;
+    std::vector<std::unique_ptr<Player>> m_vecTeamBlue;
 };
 
 // --- TeamMatchQueue 類別 (保持不變，因為它處理的是單個玩家) ---
@@ -78,12 +75,15 @@ public:
 private:
     BattleManager();
     ~BattleManager();
+
     BattleManager(const BattleManager&) = delete;
     BattleManager& operator=(const BattleManager&) = delete;
+    BattleManager(BattleManager&&) = delete;
+    BattleManager& operator=(BattleManager&&) = delete;
 
     void matchmakingThread();
 
-    std::atomic<bool> isRunning;
+    std::atomic<bool> isRunning = false;
     std::thread matchmakingThreadHandle;
 
     TeamMatchQueue teamMatchQueue;

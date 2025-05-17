@@ -61,6 +61,8 @@ int main()
     DbManager::instance().ensureTableSchema();
     DbManager::instance().loadTableData();
 
+	BattleManager::instance().startMatchmaking(); // ±Ò°Ê¤Ç°t°õ¦æºü
+
     std::cout << "Game Server initialized. Main thread ready for commands.\n";
     std::cout << "Type 'quit' or 'exit' to shut down the server.\n";
 

@@ -32,11 +32,6 @@ public:
 
     static PlayerManager& instance();
 
-    PlayerManager(const PlayerManager&) = delete;
-    PlayerManager& operator=(const PlayerManager&) = delete;
-
-    ~PlayerManager();
-
     bool initialize();
     void release();
     Player* playerLogin(uint64_t id);
@@ -47,7 +42,9 @@ public:
     std::set<uint64_t>* getOnlinePlayerIds() { return &setOnlinePlayerIds; }
     void syncPlayerFromDbNoLock(uint64_t id, uint32_t score, uint32_t wins, uint64_t updatedTime);
 
-    void savePlayer(uint64_t playerId);
+    void updatePlayerBattleResult(uint64_t playerId, uint32_t scoreDelta, bool isWin);
+
+    void enqueuePlayerSave(uint64_t playerId);
     void saveDirtyPlayers();
 
     //void getTopPlayers(std::vector<PlayerRank>& refVecTops);
@@ -63,6 +60,12 @@ public:
 private:
 
     PlayerManager();
+    ~PlayerManager();
+
+    PlayerManager(const PlayerManager&) = delete;
+    PlayerManager& operator=(const PlayerManager&) = delete;
+    PlayerManager(PlayerManager&&) = delete;
+    PlayerManager& operator=(PlayerManager&&) = delete;
 
     Player* _getPlayerNoLock(uint64_t id);
     void _setPlayerOnlineNoLock(uint64_t id, bool isOnline);
