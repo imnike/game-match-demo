@@ -57,7 +57,7 @@ private:
     ScheduleManager(ScheduleManager&&) = delete;
     ScheduleManager& operator=(ScheduleManager&&) = delete;
 
-    std::vector<ScheduledTask> m_tasks;                 // 儲存所有排程任務的列表
+    std::vector<ScheduledTask> m_tasks{};               // 儲存所有排程任務的列表
     std::mutex m_mutex;                                 // 保護 m_tasks 向量的互斥鎖
 
     std::thread m_workerThread;                         // 用來執行排程器核心邏輯的獨立執行緒
