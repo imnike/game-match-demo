@@ -15,11 +15,6 @@ class DbManager
 public:
     static DbManager& instance();
 
-    DbManager(const DbManager&) = delete;
-    DbManager& operator=(const DbManager&) = delete;
-
-    ~DbManager();
-
     bool initialize();
     void release();
     void loadTableData();
@@ -35,6 +30,12 @@ public:
 
 private:
     DbManager();
+    ~DbManager();
+
+    DbManager(const DbManager&) = delete;
+    DbManager& operator=(const DbManager&) = delete;
+    DbManager(DbManager&&) = delete;
+    DbManager& operator=(DbManager&&) = delete;
 
     sqlite3* pDbHandler = nullptr;
     std::string dbName = "";
