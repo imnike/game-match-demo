@@ -37,9 +37,9 @@ private:
     DbManager(DbManager&&) = delete;
     DbManager& operator=(DbManager&&) = delete;
 
-    sqlite3* pDbHandler = nullptr;
-    std::string dbName = "";
-    std::unordered_map<std::string, std::function<void()>> mapFuncSyncData{};
+    sqlite3* m_dbHandler = nullptr;
+    std::string m_dbName = "";
+    std::unordered_map<std::string, std::function<void()>> m_mapFuncSyncData{};
 };
 
 #endif // DB_MANAGER_H

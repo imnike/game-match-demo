@@ -20,34 +20,34 @@ DbManager& DbManager::instance()
 }
 
 DbManager::DbManager()
-    : pDbHandler(nullptr), dbName("gameMatch.db")
+    : m_dbHandler(nullptr), m_dbName("gameMatch.db")
 {
 }
 
 DbManager::~DbManager()
 {
-    if (pDbHandler)
+    if (m_dbHandler)
     {
-        sqlite3_close(pDbHandler);
-        pDbHandler = nullptr;
+        sqlite3_close(m_dbHandler);
+        m_dbHandler = nullptr;
     }
 }
 
 bool DbManager::initialize()
 {
-	mapFuncSyncData.clear();
-    mapFuncSyncData["player_battles"] = [this]() { this->syncAllPlayerBattles(); };
-    if (pDbHandler)
+	m_mapFuncSyncData.clear();
+    m_mapFuncSyncData["player_battles"] = [this]() { this->syncAllPlayerBattles(); };
+    if (m_dbHandler)
     {
-        sqlite3_close(pDbHandler);
-        pDbHandler = nullptr;
+        sqlite3_close(m_dbHandler);
+        m_dbHandler = nullptr;
     }
 
-    int rc = sqlite3_open(dbName.c_str(), &pDbHandler);
+    int rc = sqlite3_open(m_dbName.c_str(), &m_dbHandler);
     if (rc != SQLITE_OK)
     {
-        std::cerr << "DbManager::initialize: Cannot open database: " << sqlite3_errmsg(pDbHandler) << std::endl;
-        pDbHandler = nullptr;
+        std::cerr << "DbManager::initialize: Cannot open database: " << sqlite3_errmsg(m_dbHandler) << std::endl;
+        m_dbHandler = nullptr;
         return false;
     }
     return true;
@@ -55,12 +55,12 @@ bool DbManager::initialize()
 
 void DbManager::release()
 {
-    if (pDbHandler)
+    if (m_dbHandler)
     {
-        sqlite3_close(pDbHandler);
-        pDbHandler = nullptr;
+        sqlite3_close(m_dbHandler);
+        m_dbHandler = nullptr;
 	}
-	mapFuncSyncData.clear();
+	m_mapFuncSyncData.clear();
 }
 
 void DbManager::ensureTableSchema()
@@ -84,7 +84,7 @@ void DbManager::ensureTableSchema()
 
 void DbManager::loadTableData()
 {
-    for (auto& itFunc : mapFuncSyncData)
+    for (auto& itFunc : m_mapFuncSyncData)
     {
 		const std::string tableName = itFunc.first;
         // 執行itFunc
@@ -97,10 +97,10 @@ void DbManager::syncAllPlayerBattles()
 {
     const char* sql = "SELECT id, score, wins, updated_time FROM player_battles;";
     sqlite3_stmt* stmt;
-    int rc = sqlite3_prepare_v2(pDbHandler, sql, -1, &stmt, nullptr);
+    int rc = sqlite3_prepare_v2(m_dbHandler, sql, -1, &stmt, nullptr);
     if (rc != SQLITE_OK)
     {
-        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(pDbHandler) << std::endl;
+        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(m_dbHandler) << std::endl;
         return;
     }
     uint64_t id = 0;
@@ -124,7 +124,7 @@ void DbManager::syncAllPlayerBattles()
 
 bool DbManager::isTableExists(const std::string tableName)
 {
-    if (!pDbHandler) 
+    if (!m_dbHandler) 
     {
         std::cerr << "DbManager::tableExists: Database not open." << std::endl;
         return false;
@@ -134,10 +134,10 @@ bool DbManager::isTableExists(const std::string tableName)
     sqlite3_stmt* stmt = nullptr;
     bool exists = false;
 
-    int rc = sqlite3_prepare_v2(pDbHandler, sql, -1, &stmt, nullptr);
+    int rc = sqlite3_prepare_v2(m_dbHandler, sql, -1, &stmt, nullptr);
     if (rc != SQLITE_OK) 
     {
-        std::cerr << "DbManager::tableExists: Failed to prepare statement: " << sqlite3_errmsg(pDbHandler) << std::endl;
+        std::cerr << "DbManager::tableExists: Failed to prepare statement: " << sqlite3_errmsg(m_dbHandler) << std::endl;
         // 即使 prepare 失敗，也確保 stmt 被清理
         if (stmt) sqlite3_finalize(stmt);
         return false;
@@ -163,7 +163,7 @@ bool DbManager::createTable(const std::string tableName)
 		return false;
     }
     char* errMsg = nullptr;
-    int rc = sqlite3_exec(pDbHandler, itSql->second.c_str(), nullptr, nullptr, &errMsg);
+    int rc = sqlite3_exec(m_dbHandler, itSql->second.c_str(), nullptr, nullptr, &errMsg);
 
     if (rc != SQLITE_OK)
     {
@@ -183,11 +183,11 @@ uint64_t DbManager::insertPlayerBattles()
         "VALUES (?, ?, ?);";
 
     sqlite3_stmt* stmt;
-    int rc = sqlite3_prepare_v2(pDbHandler, sql, -1, &stmt, nullptr);
+    int rc = sqlite3_prepare_v2(m_dbHandler, sql, -1, &stmt, nullptr);
 
     if (rc != SQLITE_OK)
     {
-        std::cerr << "Failed to prepare insertNewPlayer statement: " << sqlite3_errmsg(pDbHandler) << std::endl;
+        std::cerr << "Failed to prepare insertNewPlayer statement: " << sqlite3_errmsg(m_dbHandler) << std::endl;
         return 0;
     }
     const uint32_t score = 0;
@@ -203,12 +203,12 @@ uint64_t DbManager::insertPlayerBattles()
 
     if (rc != SQLITE_DONE)
     {
-        std::cerr << "Failed to insert new player: " << sqlite3_errmsg(pDbHandler) << std::endl;
+        std::cerr << "Failed to insert new player: " << sqlite3_errmsg(m_dbHandler) << std::endl;
         return 0;
     }
 
     // 成功插入後，獲取新生成的 ID
-    uint64_t id = sqlite3_last_insert_rowid(pDbHandler);
+    uint64_t id = sqlite3_last_insert_rowid(m_dbHandler);
     if (id == 0)
     {
         return 0;
@@ -222,11 +222,11 @@ bool DbManager::updatePlayerBattles(uint64_t id, uint32_t score, uint32_t wins)
     const char* sql = "UPDATE player_battles SET score = ?, wins = ?, updated_time = ? WHERE id = ?;";
 
     sqlite3_stmt* stmt;
-    int rc = sqlite3_prepare_v2(pDbHandler, sql, -1, &stmt, nullptr);
+    int rc = sqlite3_prepare_v2(m_dbHandler, sql, -1, &stmt, nullptr);
 
     if (rc != SQLITE_OK)
     {
-        std::cerr << "DbManager::updatePlayerBattles: Failed to prepare statement: " << sqlite3_errmsg(pDbHandler) << std::endl;
+        std::cerr << "DbManager::updatePlayerBattles: Failed to prepare statement: " << sqlite3_errmsg(m_dbHandler) << std::endl;
         return false;
     }
 
@@ -242,7 +242,7 @@ bool DbManager::updatePlayerBattles(uint64_t id, uint32_t score, uint32_t wins)
 
     if (rc != SQLITE_DONE)
     {
-        std::cerr << "DbManager::updatePlayerBattles: Failed to save player: " << sqlite3_errmsg(pDbHandler) << std::endl;
+        std::cerr << "DbManager::updatePlayerBattles: Failed to save player: " << sqlite3_errmsg(m_dbHandler) << std::endl;
         return false;
     }
 
@@ -253,11 +253,11 @@ bool DbManager::queryPlayerBattles(uint64_t id, uint32_t& score, uint32_t& wins,
     const char* sql = "SELECT score, wins, updated_time FROM player_battles WHERE id = ?;";
 
     sqlite3_stmt* stmt;
-    int rc = sqlite3_prepare_v2(pDbHandler, sql, -1, &stmt, nullptr);
+    int rc = sqlite3_prepare_v2(m_dbHandler, sql, -1, &stmt, nullptr);
 
     if (rc != SQLITE_OK)
     {
-        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(pDbHandler) << std::endl;
+        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(m_dbHandler) << std::endl;
         return false;
     }
 
