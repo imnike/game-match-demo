@@ -1,4 +1,7 @@
-// scheduleManager.cpp
+// @file  : scheduleManager.cpp
+// @brief : 管理排程
+// @author: August
+// @date  : 2025-05-16
 #include "ScheduleManager.h"
 #include "PlayerManager.h" // 假設 PlayerManager 已經存在並包含 saveDirtyPlayers()
 
@@ -10,29 +13,29 @@ bool ScheduleManager::initialize()
         []()
         {
             PlayerManager::instance().saveDirtyPlayers();
-            std::cout << "[ScheduleManager] Player data save triggered.\n";
+            //std::cout << "[ScheduleManager] Player data save triggered.\n";
         },
         5 // 間隔：5 秒
     );
 
     // 註冊遊戲心跳任務 (每 10 秒)
-    scheduleTask(
-        []()
-        {
-            std::cout << "[ScheduleManager] Game heartbeat triggered.\n";
-        },
-        10 // 間隔：10 秒
-    );
+    //scheduleTask(
+    //    []()
+    //    {
+    //        std::cout << "[ScheduleManager] Game heartbeat triggered.\n";
+    //    },
+    //    10 // 間隔：10 秒
+    //);
 
-    // 註冊一個一次性啟動檢查任務 (3 秒後執行一次)
-    scheduleTask(
-        []()
-        {
-            std::cout << "[ScheduleManager] One-time startup check completed!\n";
-        },
-        3,      // 間隔：3 秒
-        false   // 只執行一次
-    );
+    //// 註冊一個一次性啟動檢查任務 (3 秒後執行一次)
+    //scheduleTask(
+    //    []()
+    //    {
+    //        std::cout << "[ScheduleManager] One-time startup check completed!\n";
+    //    },
+    //    3,      // 間隔：3 秒
+    //    false   // 只執行一次
+    //);
 
     std::cout << "ScheduleManager initialized and tasks scheduled.\n";
 
